@@ -17,7 +17,7 @@ jobs:
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v1
     
       # Runs autoflake
       - name: autoflake
@@ -34,14 +34,15 @@ jobs:
         run:
           pip install isort && isort .
         
+      # Commit changes
       - name: Check for modified files
         id: git-check
         run: echo ::set-output name=modified::$(if git diff-index --quiet HEAD --; then echo "false"; else echo "true"; fi)
       - name: Push changes
-        if: ${{steps.git-check.outputs.modified == 'true'}}
-        run:
-          git config --global user.name 'Andrew Chen' &&
-          git config --global user.email 'achen353@users.noreply.github.com' &&
+        if: steps.git-check.outputs.modified == 'true'
+        run: |
+          git config --global user.name 'github-actions[bot]' &&
+          git config --global user.email '41898282+github-actions[bot]@users.noreply.github.com' &&
           git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} &&
           git commit -am "Automated reformatting" &&
           git push
