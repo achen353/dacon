@@ -26,7 +26,7 @@ for da in ['None', 'edbt20', 'del', 'invda', 'auto_ssl_no_ssl', 'auto_ssl']:
     for dataset in datasets:
         for n_epochs, size in zip(n_epochs_list, sizes):
             for run_id in range(5):
-                cmd = """CUDA_VISIBLE_DEVICES=2 python train_any.py \
+                cmd = """CUDA_VISIBLE_DEVICES=0 python train_any.py \
               --task %s \
               --logdir %s/ \
               --finetuning \
@@ -49,7 +49,7 @@ for da in ['None', 'edbt20', 'del', 'invda', 'auto_ssl_no_ssl', 'auto_ssl']:
 
 # Note: use this hyperparameter set (no balancing but with warmup) for Walmart-Amazon and Walmart-Amazon-dirty
 #
-# CUDA_VISIBLE_DEVICES=2 python train_any.py \
+# CUDA_VISIBLE_DEVICES=0 python train_any.py \
 # --task em_Walmart-Amazon-dirty \
 # --logdir results_em_tmp/ \
 # --finetuning \
@@ -69,7 +69,7 @@ for dataset in datasets:
     dataset = dataset.replace('em_', '')
     for n_epochs, size in zip(n_epochs_list, sizes):
         for run_id in range(5):
-            cmd = """CUDA_VISIBLE_DEVICES=2 python ditto/dm.py \
+            cmd = """CUDA_VISIBLE_DEVICES=0 python ditto/dm.py \
           --task %s \
           --logdir %s/ \
           --batch_size %d \

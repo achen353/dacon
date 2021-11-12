@@ -19,7 +19,7 @@ for dataset in datasets:
                 n_epochs = 20
 
             for run_id in range(5):
-                cmd = """CUDA_VISIBLE_DEVICES=2 python train_any.py \
+                cmd = """CUDA_VISIBLE_DEVICES=0 python train_any.py \
               --task cleaning_%s_%d_%d \
               --logdir %s/ \
               --finetuning \

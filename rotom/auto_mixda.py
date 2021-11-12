@@ -245,7 +245,7 @@ def train(model,
         model_gradients = [p.grad.data.clone() if p.grad is not None \
                 else None for p in model.parameters()]
         with torch.no_grad():
-            grad_L2 = torch.zeros(())
+            grad_L2 = torch.zeros((), device=torch.device("cuda"))
             for g in model_gradients:
                 if g is not None:
                     grad_L2 += g.pow(2).sum()

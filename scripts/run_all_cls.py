@@ -20,7 +20,7 @@ for dataset in datasets:
 
             for run_id in range(5):
                 start = time.time()
-                cmd = """CUDA_VISIBLE_DEVICES=2 python train_any.py \
+                cmd = """CUDA_VISIBLE_DEVICES=0 python train_any.py \
               --task %s_%d \
               --logdir %s/ \
               --finetuning \
