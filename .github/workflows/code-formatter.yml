@@ -21,18 +21,21 @@ jobs:
     
       # Runs autoflake
       - name: autoflake
-        run:
-          pip install autoflake && autoflake -r --in-place --remove-all-unused-imports .
+        run: |
+          pip install autoflake
+          autoflake -r --in-place --remove-all-unused-imports .
       
       # Runs black
       - name: black
-        run: 
-          pip install black && black .
+        run: |
+          pip install black
+          black .
 
       # Runs isort
       - name: isort
-        run:
-          pip install isort && isort .
+        run: |
+          pip install isort
+          isort .
         
       # Commit changes
       - name: Check for modified files
@@ -41,6 +44,7 @@ jobs:
       - name: Push changes
         if: steps.git-check.outputs.modified == 'true'
         run: |
+          git diff-index
           git config --global user.name 'github-actions[bot]'
           git config --global user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
