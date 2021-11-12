@@ -1,24 +1,20 @@
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
 import os
-import numpy as np
-import argparse
-import json
-import copy
 import random
 
-from torch.utils import data
-from .model import MultiTaskNet
-from .policy import FilterPolicyNet, AugmentPolicyNetV4
-from snippext.train_util import *
-from snippext.dataset import *
+import numpy as np
+import torch
+import torch.nn.functional as F
 from tensorboardX import SummaryWriter
-from transformers import AdamW, get_linear_schedule_with_warmup
-from copy import deepcopy
-from apex import amp
+from torch.utils import data
 from tqdm import tqdm
+from transformers import AdamW, get_linear_schedule_with_warmup
+
+from apex import amp
+from snippext.dataset import *
+from snippext.train_util import *
+
+from .model import MultiTaskNet
+from .policy import AugmentPolicyNetV4, FilterPolicyNet
 
 
 def sharpen(logits, T=0.5):
@@ -30,9 +26,10 @@ def sharpen(logits, T=0.5):
     Returns:
         Tensor: the sharpened tensor
     """
-    logits = logits.pow(1/T)
+    logits = logits.pow(1 / T)
     logits = logits / logits.sum(dim=-1, keepdim=True)
     return logits
+
 
 def sharpen_onehot(logits, bar=0.1):
     """Sharpen a label probability distribution to onehot given a threshold
@@ -54,17 +51,15 @@ def sharpen_onehot(logits, bar=0.1):
 
     max_val = logits.max(dim=-1)[0]
 
-    res = res_above * max_val.ge(T).float().unsqueeze(1) + \
-          res_below * max_val.le(T).float().unsqueeze(1)
+    res = res_above * max_val.ge(T).float().unsqueeze(1) + res_below * max_val.le(
+        T
+    ).float().unsqueeze(1)
     return res
 
-def create_batches(l_set,
-                   w_aug_set,
-                   s_aug_set,
-                   u_set,
-                   batch_size=32,
-                   max_aug=16,
-                   no_ssl=False):
+
+def create_batches(
+    l_set, w_aug_set, s_aug_set, u_set, batch_size=32, max_aug=16, no_ssl=False
+):
     """Create batches for filtering and weighting
 
     Args:
@@ -99,8 +94,7 @@ def create_batches(l_set,
             if hasattr(ds, "t5_examples"):
                 for i in range(len(ds)):
                     for idx in range(len(ds.t5_examples[i])):
-                        ds.aug_examples[i].append(ds.get(i, ops=[['t5']],
-                            aug_idx=idx))
+                        ds.aug_examples[i].append(ds.get(i, ops=[["t5"]], aug_idx=idx))
             else:
                 for i in tqdm(range(len(ds))):
                     for _ in range(max_aug):
@@ -110,7 +104,7 @@ def create_batches(l_set,
     for i in range(size):
         # add to l_batch
         idx = l_index[i]
-        exm = {'original': l_set[idx]}
+        exm = {"original": l_set[idx]}
 
         # augmentations
         augments = []
@@ -118,7 +112,7 @@ def create_batches(l_set,
         augments += random.sample(s_aug_set.aug_examples[idx], num_aug)
         num_aug = min(max_aug - num_aug, len(w_aug_set.aug_examples[idx]))
         augments += random.sample(w_aug_set.aug_examples[idx], num_aug)
-        exm['augments'] = augments
+        exm["augments"] = augments
 
         # unlabeled examples
         u_exms = []
@@ -126,7 +120,7 @@ def create_batches(l_set,
 
         if not no_ssl:
             while len(u_exms) < 1:
-            # while len(u_exms) < max_aug:
+                # while len(u_exms) < max_aug:
                 idx = u_index[u_pos]
                 # not augmented
                 u_exms.append(u_set.get(idx, []))
@@ -137,8 +131,8 @@ def create_batches(l_set,
                     u_pos = 0
                     u_index = np.random.permutation(u_size)
 
-        exm['u_exms'] = u_exms
-        exm['u_exms_aug'] = u_exms_aug
+        exm["u_exms"] = u_exms
+        exm["u_exms_aug"] = u_exms_aug
 
         # append and return
         examples.append(exm)
@@ -168,15 +162,15 @@ def process_filter(model, policy, batch, padder):
     all_exms = []
     u_indices = []
     for exm in batch:
-        all_exms.append(exm['original'])
-        for aug in exm['augments']:
+        all_exms.append(exm["original"])
+        for aug in exm["augments"]:
             all_exms.append(aug)
 
-        for u_exm_aug in exm['u_exms_aug']:
+        for u_exm_aug in exm["u_exms_aug"]:
             u_indices.append(len(all_exms))
             all_exms.append(u_exm_aug)
 
-        for u_exm in exm['u_exms']:
+        for u_exm in exm["u_exms"]:
             # mark the positions of unlabeled examples
             u_indices.append(len(all_exms))
             all_exms.append(u_exm)
@@ -198,7 +192,7 @@ def process_filter(model, policy, batch, padder):
             x_enc = model(x, task=taskname, get_enc=True)
             logits, y, _ = model(x_enc=x_enc, y=y, task=taskname)
 
-            if 'sts-b' not in taskname.lower():
+            if "sts-b" not in taskname.lower():
                 y_pred = logits.softmax(dim=-1)
                 y = F.one_hot(y, num_classes).float()
             else:
@@ -215,7 +209,7 @@ def process_filter(model, policy, batch, padder):
 
         # sharpening for unlabeled y's
         if len(u_indices) > 0:
-            if 'sts-b' not in taskname.lower():
+            if "sts-b" not in taskname.lower():
                 # ys[u_indices] = sharpen(y_preds[u_indices])
                 # ys[u_indices] = sharpen_onehot(y_preds[u_indices])
                 if random.randint(0, 1) == 0:
@@ -224,7 +218,6 @@ def process_filter(model, policy, batch, padder):
                     ys[u_indices] = sharpen(y_preds[u_indices])
             else:
                 ys[u_indices] = y_preds[u_indices]
-
 
     # step 2: featurize each (original, augmented, and unlabeled) example
     # step 3: predict with the filtering policy
@@ -242,12 +235,12 @@ def process_filter(model, policy, batch, padder):
         y_indices.append((idx, idx))
         idx += 1
 
-        for aug in exm['augments']:
+        for aug in exm["augments"]:
             y_indices.append((idx, ori_idx))
             idx += 1
 
-        u_size = len(exm['u_exms_aug'])
-        for u_exm in exm['u_exms_aug']:
+        u_size = len(exm["u_exms_aug"])
+        for u_exm in exm["u_exms_aug"]:
             y_indices.append((idx, idx + u_size))
             idx += 1
 
@@ -255,7 +248,7 @@ def process_filter(model, policy, batch, padder):
             aug_mp[k] = v
 
         # skip the u_aug
-        idx += len(exm['u_exms'])
+        idx += len(exm["u_exms"])
 
         idx1, idx2 = zip(*y_indices)
         y = ys[list(idx2)]
@@ -265,8 +258,8 @@ def process_filter(model, policy, batch, padder):
         # featurize
         features = policy.featurize(y, y_pred, y_aug)
 
-        u_start = 1 + len(exm['augments'])
-        u_end = u_start + len(exm['u_exms'])
+        u_start = 1 + len(exm["augments"])
+        u_end = u_start + len(exm["u_exms"])
 
         for start, end in zip([0, u_start], [u_start, u_end]):
             if end == start:
@@ -275,7 +268,7 @@ def process_filter(model, policy, batch, padder):
             # featurize
             # if start == 0 and end - start > 1:
             if end - start > 1:
-                logits = policy(features[start:end], labeled=(start==0))
+                logits = policy(features[start:end], labeled=(start == 0))
 
                 probs = sharpen(logits, T=0.1)
                 m = torch.distributions.categorical.Categorical(probs=probs)
@@ -303,15 +296,10 @@ def process_filter(model, policy, batch, padder):
     enc_indices = [aug_mp[k] for k in exm_indices]
     # print(ys[enc_indices][-1], y_preds[exm_indices][-1], new_batch[-1][5])
 
-    return padder(new_batch), x_encs[enc_indices],\
-           ys[enc_indices], log_prob_sum
+    return padder(new_batch), x_encs[enc_indices], ys[enc_indices], log_prob_sum
 
 
-def auto_ssl(model, batch,
-             aug_enc=None,
-             labels=None,
-             policy=None,
-             get_ind=False):
+def auto_ssl(model, batch, aug_enc=None, labels=None, policy=None, get_ind=False):
     """Train the model on a filtered batch with the weighting policy
 
     Args:
@@ -334,9 +322,11 @@ def auto_ssl(model, batch,
     if policy is None:
         # y: LongTensor
         logits, y, _ = model(x, y, task=taskname)
-        if 'sts-b' not in taskname.lower():
+        if "sts-b" not in taskname.lower():
             y = F.one_hot(y, num_classes).float()
-        ind = torch.ones(x.size()[0],).to(model.device)
+        ind = torch.ones(
+            x.size()[0],
+        ).to(model.device)
     else:
         # y: onehot Tensor for labeled/augmented examples
         #    or guessed labels for unlabeled examples
@@ -359,13 +349,13 @@ def auto_ssl(model, batch,
         ind = policy(x, y, prediction=logits.softmax(dim=-1))
 
     # consider three types of tasks: tagging, regression, and classification
-    if 'sts-b' in taskname.lower():
+    if "sts-b" in taskname.lower():
         logits = logits.view(-1)
-        loss = (((logits - y) ** 2).sum() * ind).mean() # F.mse_loss(logits, y)
+        loss = (((logits - y) ** 2).sum() * ind).mean()  # F.mse_loss(logits, y)
     else:
         logits = logits.view(-1, logits.shape[-1])
         logits = F.softmax(logits, dim=-1)
-        if 'tagging' in taskname:
+        if "tagging" in taskname:
             sz = (y.size()[2] - 1) * y.size()[1]
             ind = ind.view(-1).repeat_interleave(sz).view(-1, y.size()[2] - 1)
             y = y.view(-1, y.shape[-1])
@@ -379,21 +369,23 @@ def auto_ssl(model, batch,
         return loss
 
 
-def train(model,
-          filter_model,
-          weight_model,
-          l_set,
-          w_aug_set,
-          s_aug_set,
-          u_set,
-          v_set,
-          optimizer,
-          filter_optimizer,
-          weight_optimizer,
-          scheduler=None,
-          fp16=False,
-          batch_size=32,
-          no_ssl=False):
+def train(
+    model,
+    filter_model,
+    weight_model,
+    l_set,
+    w_aug_set,
+    s_aug_set,
+    u_set,
+    v_set,
+    optimizer,
+    filter_optimizer,
+    weight_optimizer,
+    scheduler=None,
+    fp16=False,
+    batch_size=32,
+    no_ssl=False,
+):
     """Perform one epoch of LM training with meta-learning
 
     Args:
@@ -419,29 +411,29 @@ def train(model,
     # validation batches
     da_batches = None
     # create the training batches
-    batches = create_batches(l_set,
-                             w_aug_set,
-                             s_aug_set,
-                             u_set,
-                             batch_size=batch_size,
-                             no_ssl=no_ssl)
+    batches = create_batches(
+        l_set, w_aug_set, s_aug_set, u_set, batch_size=batch_size, no_ssl=no_ssl
+    )
 
     for i, batch in enumerate(batches):
         try:
             da_batch = next(da_batches)
         except:
-            da_batches = iter(data.DataLoader(dataset=v_set,
-                                 batch_size=batch_size,
-                                 shuffle=True,
-                                 num_workers=0,
-                                 collate_fn=v_set.pad))
+            da_batches = iter(
+                data.DataLoader(
+                    dataset=v_set,
+                    batch_size=batch_size,
+                    shuffle=True,
+                    num_workers=0,
+                    collate_fn=v_set.pad,
+                )
+            )
             da_batch = next(da_batches)
 
         # run the filtering model
-        new_batch, aug_enc, new_y, log_prob = process_filter(model,
-                                            filter_model,
-                                            batch,
-                                            l_set.pad)
+        new_batch, aug_enc, new_y, log_prob = process_filter(
+            model, filter_model, batch, l_set.pad
+        )
 
         words, x, is_heads, tags, mask, y, seqlens, taskname = new_batch
         taskname = taskname[0]
@@ -452,13 +444,13 @@ def train(model,
         model_values = [p.data.clone() for p in model.parameters()]
 
         # learning rate
-        lr = [group['lr'] for group in optimizer.param_groups]
+        lr = [group["lr"] for group in optimizer.param_groups]
 
         # virtual SGD step
         optimizer.zero_grad()
-        train_loss = auto_ssl(model, new_batch, policy=weight_model,
-                              aug_enc=aug_enc,
-                              labels=new_y)
+        train_loss = auto_ssl(
+            model, new_batch, policy=weight_model, aug_enc=aug_enc, labels=new_y
+        )
         if fp16:
             with amp.scale_loss(train_loss, optimizer) as scaled_loss:
                 scaled_loss.backward()
@@ -481,8 +473,10 @@ def train(model,
             val_loss.backward()
 
         # compute epsilon
-        model_gradients = [p.grad.data.clone() if p.grad is not None \
-                else None for p in model.parameters()]
+        model_gradients = [
+            p.grad.data.clone() if p.grad is not None else None
+            for p in model.parameters()
+        ]
         with torch.no_grad():
             grad_L2 = torch.zeros(())
             for g in model_gradients:
@@ -500,9 +494,9 @@ def train(model,
                         p.data = v + sign * epsilon * g
                     else:
                         p.data = v
-            loss_pm = auto_ssl(model, new_batch, policy=weight_model,
-                               aug_enc=aug_enc,
-                               labels=new_y)
+            loss_pm = auto_ssl(
+                model, new_batch, policy=weight_model, aug_enc=aug_enc, labels=new_y
+            )
             loss_pm = loss_pm * -sign / 2 / epsilon * lr[0]
             if fp16:
                 with amp.scale_loss(loss_pm, weight_optimizer) as scaled_loss:
@@ -520,11 +514,14 @@ def train(model,
 
         # phase two: update the model parameters
         optimizer.zero_grad()
-        loss, ind = auto_ssl(model, new_batch,
-                             policy=weight_model,
-                             aug_enc=aug_enc,
-                             labels=new_y,
-                             get_ind=True)
+        loss, ind = auto_ssl(
+            model,
+            new_batch,
+            policy=weight_model,
+            aug_enc=aug_enc,
+            labels=new_y,
+            get_ind=True,
+        )
 
         if fp16:
             with amp.scale_loss(loss, optimizer) as scaled_loss:
@@ -539,7 +536,7 @@ def train(model,
         with torch.no_grad():
             v_loss = auto_ssl(model, da_batch, policy=None)
 
-        reward = log_prob * -v_loss # flag
+        reward = log_prob * -v_loss  # flag
         if fp16:
             with amp.scale_loss(reward, filter_optimizer) as scaled_loss:
                 scaled_loss.backward()
@@ -564,14 +561,17 @@ def train(model,
 
             print("=====sanity check======")
             print("words:", words[0])
-            print("x:", x.cpu().numpy()[0][:seqlens[0]])
-            print("tokens:", get_tokenizer().convert_ids_to_tokens(x.cpu().numpy()[0])[:seqlens[0]])
+            print("x:", x.cpu().numpy()[0][: seqlens[0]])
+            print(
+                "tokens:",
+                get_tokenizer().convert_ids_to_tokens(x.cpu().numpy()[0])[: seqlens[0]],
+            )
             print("is_heads:", is_heads[0])
             y_sample = y.cpu().numpy()[0]
             if np.isscalar(y_sample):
                 print("y:", y_sample, new_y[0].cpu())
             else:
-                print("y:", y_sample[:seqlens[0]])
+                print("y:", y_sample[: seqlens[0]])
 
             unlabeled = new_y.max(dim=-1)[0].le(0.999).cpu()
             num_unlabeled = unlabeled.sum()
@@ -582,34 +582,45 @@ def train(model,
             print("seqlen:", seqlens[0])
             print("task_name:", taskname)
 
-            print("unlabeled_weight: ", (unlabeled.float() * ind.cpu()).sum() / num_unlabeled)
-            print("labeled_weight: ", ((1 - unlabeled.float()) * ind.cpu()).sum() / (len(words) - num_unlabeled))
-            print("filter model: ", filter_model.fc.weight.data, filter_model.fc.bias.data)
+            print(
+                "unlabeled_weight: ",
+                (unlabeled.float() * ind.cpu()).sum() / num_unlabeled,
+            )
+            print(
+                "labeled_weight: ",
+                ((1 - unlabeled.float()) * ind.cpu()).sum()
+                / (len(words) - num_unlabeled),
+            )
+            print(
+                "filter model: ", filter_model.fc.weight.data, filter_model.fc.bias.data
+            )
 
             max_idx = int(ind.argmax().cpu())
             min_idx = int(ind.argmin().cpu())
-            print('max_ind: ', ind.max(), 'min_ind: ', ind.min())
-            if 'tagging_' not in taskname:
-                names = ['labeled', 'unlabeled']
-                print('good (%s), y=%d: %s' % (names[unlabeled[max_idx]], int(y[max_idx]), words[max_idx]))
-                print('bad (%s), y=%d: %s' % (names[unlabeled[min_idx]], int(y[min_idx]), words[min_idx]))
+            print("max_ind: ", ind.max(), "min_ind: ", ind.min())
+            if "tagging_" not in taskname:
+                names = ["labeled", "unlabeled"]
+                print(
+                    "good (%s), y=%d: %s"
+                    % (names[unlabeled[max_idx]], int(y[max_idx]), words[max_idx])
+                )
+                print(
+                    "bad (%s), y=%d: %s"
+                    % (names[unlabeled[min_idx]], int(y[min_idx]), words[min_idx])
+                )
 
             print("=======================")
 
-        if i%10 == 0: # monitoring
-            print(f"step: {i}, task: {taskname}, loss: {loss.item()}, v_loss: {v_loss.item()}, reward: {reward.item()}")
+        if i % 10 == 0:  # monitoring
+            print(
+                f"step: {i}, task: {taskname}, loss: {loss.item()}, v_loss: {v_loss.item()}, reward: {reward.item()}"
+            )
             del loss
 
 
-def initialize_and_train(task_config,
-                         l_set,
-                         w_aug_set,
-                         s_aug_set,
-                         u_set,
-                         validset,
-                         testset,
-                         hp,
-                         run_tag):
+def initialize_and_train(
+    task_config, l_set, w_aug_set, s_aug_set, u_set, validset, testset, hp, run_tag
+):
     """The train process.
 
     Args:
@@ -629,16 +640,20 @@ def initialize_and_train(task_config,
     padder = SnippextDataset.pad
 
     # iterators for dev/test set
-    valid_iter = data.DataLoader(dataset=validset,
-                                 batch_size=hp.batch_size,
-                                 shuffle=False,
-                                 num_workers=0,
-                                 collate_fn=padder)
-    test_iter = data.DataLoader(dataset=testset,
-                                 batch_size=hp.batch_size*4,
-                                 shuffle=False,
-                                 num_workers=0,
-                                 collate_fn=padder)
+    valid_iter = data.DataLoader(
+        dataset=validset,
+        batch_size=hp.batch_size,
+        shuffle=False,
+        num_workers=0,
+        collate_fn=padder,
+    )
+    test_iter = data.DataLoader(
+        dataset=testset,
+        batch_size=hp.batch_size * 4,
+        shuffle=False,
+        num_workers=0,
+        collate_fn=padder,
+    )
 
     # initialize model
     if l_set.vocab is None:
@@ -646,20 +661,18 @@ def initialize_and_train(task_config,
     else:
         num_classes = len(l_set.vocab)
 
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # the model to be trained
-    model = MultiTaskNet([task_config], device=device,
-                         lm=hp.lm, bert_path=hp.bert_path)
+    model = MultiTaskNet([task_config], device=device, lm=hp.lm, bert_path=hp.bert_path)
 
     # the model for filtering
-    filter_model = FilterPolicyNet(num_classes=max(1, num_classes),
-                                   device=device)
+    filter_model = FilterPolicyNet(num_classes=max(1, num_classes), device=device)
 
     # the model for weighting
-    weight_model = AugmentPolicyNetV4(num_classes, device,
-                         lm=hp.lm, bert_path=hp.bert_path)
-
+    weight_model = AugmentPolicyNetV4(
+        num_classes, device, lm=hp.lm, bert_path=hp.bert_path
+    )
 
     # move to device
     model = model.to(device)
@@ -668,26 +681,24 @@ def initialize_and_train(task_config,
 
     # construct the optimizers and schedulers
     optimizer = AdamW(model.parameters(), lr=hp.lr)
-    filter_optimizer = AdamW(filter_model.parameters(), lr=0.01) # 0.01
+    filter_optimizer = AdamW(filter_model.parameters(), lr=0.01)  # 0.01
     weight_optimizer = AdamW(weight_model.parameters(), lr=hp.lr)
 
-    if device == 'cuda' and hp.fp16:
-        model, optimizer = amp.initialize(model,
-                                          optimizer,
-                                          opt_level='O2')
-        filter_model, filter_optimizer = amp.initialize(filter_model,
-                                          filter_optimizer,
-                                          opt_level='O2')
-        weight_model, weight_optimizer = amp.initialize(weight_model,
-                                          weight_optimizer,
-                                          opt_level='O2')
+    if device == "cuda" and hp.fp16:
+        model, optimizer = amp.initialize(model, optimizer, opt_level="O2")
+        filter_model, filter_optimizer = amp.initialize(
+            filter_model, filter_optimizer, opt_level="O2"
+        )
+        weight_model, weight_optimizer = amp.initialize(
+            weight_model, weight_optimizer, opt_level="O2"
+        )
 
     # learning rate scheduler
     # half labeled and half unlabeled
     num_steps = len(l_set) * 2 // hp.batch_size * hp.n_epochs
-    scheduler = get_linear_schedule_with_warmup(optimizer,
-                                      num_warmup_steps=num_steps / 10,
-                                      num_training_steps=num_steps)
+    scheduler = get_linear_schedule_with_warmup(
+        optimizer, num_warmup_steps=num_steps / 10, num_training_steps=num_steps
+    )
 
     # create logging
     if not os.path.exists(hp.logdir):
@@ -696,40 +707,44 @@ def initialize_and_train(task_config,
 
     best_dev_f1 = best_test_f1 = 0.0
     # train the model and policy
-    for epoch in range(1, hp.n_epochs+1):
-        train(model,
-              filter_model,
-              weight_model,
-              l_set,
-              w_aug_set,
-              s_aug_set,
-              u_set,
-              validset,
-              optimizer,
-              filter_optimizer,
-              weight_optimizer,
-              scheduler=scheduler,
-              fp16=hp.fp16,
-              batch_size=hp.batch_size,
-              no_ssl=(hp.no_ssl or 'no_ssl' in hp.da))
+    for epoch in range(1, hp.n_epochs + 1):
+        train(
+            model,
+            filter_model,
+            weight_model,
+            l_set,
+            w_aug_set,
+            s_aug_set,
+            u_set,
+            validset,
+            optimizer,
+            filter_optimizer,
+            weight_optimizer,
+            scheduler=scheduler,
+            fp16=hp.fp16,
+            batch_size=hp.batch_size,
+            no_ssl=(hp.no_ssl or "no_ssl" in hp.da),
+        )
 
         print(f"=========eval at epoch={epoch}=========")
-        dev_f1, test_f1 = eval_on_task(epoch,
-                            model,
-                            task_config['name'],
-                            valid_iter,
-                            validset,
-                            test_iter,
-                            testset,
-                            writer,
-                            run_tag)
+        dev_f1, test_f1 = eval_on_task(
+            epoch,
+            model,
+            task_config["name"],
+            valid_iter,
+            validset,
+            test_iter,
+            testset,
+            writer,
+            run_tag,
+        )
 
         if hp.save_model:
             if dev_f1 > best_dev_f1:
                 best_dev_f1 = dev_f1
-                torch.save(model.state_dict(), run_tag + '_dev.pt')
+                torch.save(model.state_dict(), run_tag + "_dev.pt")
             if test_f1 > best_test_f1:
                 best_test_f1 = test_f1
-                torch.save(model.state_dict(), run_tag + '_test.pt')
+                torch.save(model.state_dict(), run_tag + "_test.pt")
 
     writer.close()

@@ -1,17 +1,18 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+
 from .model import get_lm
 
 
 class FilterPolicyNet(nn.Module):
     """The model for filtering the augmented/unlabeled examples"""
-    def __init__(self, num_classes=None, num_features=None, device='cuda'):
+
+    def __init__(self, num_classes=None, num_features=None, device="cuda"):
         super().__init__()
         self.device = device
 
         if num_features is None:
-            self.num_features = num_classes * 2 # num_classes * 4
+            self.num_features = num_classes * 2  # num_classes * 4
         else:
             self.num_features = num_features
         self.hidden_size = 10
@@ -25,20 +26,20 @@ class FilterPolicyNet(nn.Module):
 
     def featurize(self, y, y_pred, y_aug):
         """Featurize an example given its predictions and labels"""
-        KLD = torch.nn.KLDivLoss(reduction='none')
-        return torch.cat((y, KLD(y_aug, y_pred)), dim=-1) # .mean(dim=-1).unsqueeze(-1)
+        KLD = torch.nn.KLDivLoss(reduction="none")
+        return torch.cat((y, KLD(y_aug, y_pred)), dim=-1)  # .mean(dim=-1).unsqueeze(-1)
 
     def forward(self, x, labeled=True):
         """Get probability of each examples"""
         if labeled:
-            output = self.fc(x) # .sigmoid(output)
+            output = self.fc(x)  # .sigmoid(output)
         else:
             output = self.fc_unlabeled(x)
         return output.squeeze()
 
-class AugmentPolicyNetV4(nn.Module):
 
-    def __init__(self, num_classes, device='cuda', lm='distilbert', bert_path=None):
+class AugmentPolicyNetV4(nn.Module):
+    def __init__(self, num_classes, device="cuda", lm="distilbert", bert_path=None):
         super().__init__()
         self.device = device
         self.bert = get_lm(lm=lm, bert_path=bert_path)
@@ -56,8 +57,8 @@ class AugmentPolicyNetV4(nn.Module):
         y = y.to(self.device)
 
         if x_enc is None:
-            x_enc = self.bert(x)[0] # (bs, seq_len, hs)
-            x_enc = x_enc[:, 0, :] # (bs, hs)
+            x_enc = self.bert(x)[0]  # (bs, seq_len, hs)
+            x_enc = x_enc[:, 0, :]  # (bs, hs)
 
         if prediction is None:
             # return the uncertainty
@@ -69,8 +70,8 @@ class AugmentPolicyNetV4(nn.Module):
             prob = prediction
 
             mse = ((prob - y) ** 2).mean(dim=-1)
-            if len(y.size()) == 3: # tagging task
-                mse = mse.mean(dim=-1) # ((prob - y) ** 2).mean(dim=[1,2])
+            if len(y.size()) == 3:  # tagging task
+                mse = mse.mean(dim=-1)  # ((prob - y) ** 2).mean(dim=[1,2])
 
             ind = mse + hard
             return ind / ind.sum() * x.size()[0]

@@ -1,36 +1,28 @@
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
 import os
-import numpy as np
-import argparse
-import json
-import copy
-import random
 
+import numpy as np
+import torch
+import torch.nn.functional as F
+from tensorboardX import SummaryWriter
 from torch.utils import data
+from transformers import AdamW, get_linear_schedule_with_warmup
+
+from apex import amp
+from snippext.baseline import train as train_baseline
+from snippext.dataset import *
+from snippext.train_util import *
+
 from .model import MultiTaskNet
 from .policy import AugmentPolicyNetV4
-from snippext.train_util import *
-from snippext.dataset import *
-from snippext.baseline import train as train_baseline
-from tensorboardX import SummaryWriter
-from transformers import AdamW, get_linear_schedule_with_warmup
-from copy import deepcopy
-from apex import amp
 
 
 def sharpen(logits, T=0.5):
-    logits = logits.pow(1/T)
+    logits = logits.pow(1 / T)
     logits = logits / logits.sum(dim=-1, keepdim=True)
     return logits
 
-def create_batches(l_set,
-                   w_aug_set,
-                   s_aug_set,
-                   u_set,
-                   batch_size=32):
+
+def create_batches(l_set, w_aug_set, s_aug_set, u_set, batch_size=32):
     """Create batches for AutoMixDA
 
     Args:
@@ -80,9 +72,11 @@ def auto_mixda(model, batch, policy=None, get_ind=False, no_ssl=False):
 
     if policy is None:
         logits, y, _ = model(x, y, task=taskname)
-        if 'sts-b' not in taskname.lower():
+        if "sts-b" not in taskname.lower():
             y = F.one_hot(y, num_classes).float()
-        ind = torch.ones(x.size()[0],).to(model.device)
+        ind = torch.ones(
+            x.size()[0],
+        ).to(model.device)
     else:
         # 5 batches: labeled, weakly augmented, strongly augmented,
         # unlabeled, and unlabeled original
@@ -90,30 +84,30 @@ def auto_mixda(model, batch, policy=None, get_ind=False, no_ssl=False):
         bs = batch_size // 5
 
         # generate model predictions
-        x_enc = model(x=x[:bs*4], task=taskname, get_enc=True)
+        x_enc = model(x=x[: bs * 4], task=taskname, get_enc=True)
         logits, y, _ = model(x_enc=x_enc, y=y, task=taskname)
         # logits, y, _ = model(x=x[:bs*3], y=y, task=taskname)
 
         # convert to onehot labels for the first 3 labeled batches
-        if 'sts-b' not in taskname.lower():
-            y_onehot = F.one_hot(y[:bs*3], num_classes).float()
+        if "sts-b" not in taskname.lower():
+            y_onehot = F.one_hot(y[: bs * 3], num_classes).float()
         else:
-            y_onehot = y[:bs*3]
+            y_onehot = y[: bs * 3]
 
         # generate guess labels for the unlabeled batch
         with torch.no_grad():
             # u_logits, _, _ = model(x=x[bs*4:], y=y, task=taskname)
             # interpolate
-            u_enc = model(x=x[bs*4:], task=taskname, get_enc=True)
+            u_enc = model(x=x[bs * 4 :], task=taskname, get_enc=True)
             # MixDA
             beta = torch.distributions.beta.Beta(0.8, 0.8)
             lam = beta.sample()
             lam = torch.max(1 - lam, lam)
-            u_enc = u_enc * lam + x_enc[3*bs:4*bs] * (1.0 - lam)
+            u_enc = u_enc * lam + x_enc[3 * bs : 4 * bs] * (1.0 - lam)
 
             u_logits, _, _ = model(x_enc=u_enc, y=y, task=taskname)
 
-            if 'sts-b' not in taskname.lower():
+            if "sts-b" not in taskname.lower():
                 u_guess = sharpen(u_logits.softmax(dim=-1))
             else:
                 u_guess = u_logits.view(-1)
@@ -122,22 +116,28 @@ def auto_mixda(model, batch, policy=None, get_ind=False, no_ssl=False):
         # y = y_onehot
 
         # the policy model generate the weights of each example
-        ind = policy(x[:bs*4], y, x_enc=x_enc[:bs*4], prediction=logits.softmax(dim=-1))
+        ind = policy(
+            x[: bs * 4], y, x_enc=x_enc[: bs * 4], prediction=logits.softmax(dim=-1)
+        )
         if no_ssl:
-            ind[-bs:] = torch.zeros(bs,).to(model.device)
+            ind[-bs:] = torch.zeros(
+                bs,
+            ).to(model.device)
 
     # consider three types of tasks: tagging, regression, and classification
-    if 'sts-b' in taskname.lower():
+    if "sts-b" in taskname.lower():
         logits = logits.view(-1)
-        loss = (((logits - y) ** 2).sum() * ind).mean() # F.mse_loss(logits, y)
+        loss = (((logits - y) ** 2).sum() * ind).mean()  # F.mse_loss(logits, y)
     else:
         logits = logits.view(-1, logits.shape[-1])
         logits = F.softmax(logits, dim=-1)
-        if 'tagging' in taskname:
+        if "tagging" in taskname:
             sz = (y.size()[2] - 1) * y.size()[1]
             ind = ind.view(-1).repeat_interleave(sz).view(-1, y.size()[2] - 1)
             y = y.view(-1, y.shape[-1])
-            loss = torch.sum(-y[:, 1:] * logits[:, 1:].log() * ind, dim=-1).mean() # TODO: this one is problematic
+            loss = torch.sum(
+                -y[:, 1:] * logits[:, 1:].log() * ind, dim=-1
+            ).mean()  # TODO: this one is problematic
         else:
             loss = (torch.sum(-y * logits.log(), -1) * ind).mean()
 
@@ -147,20 +147,22 @@ def auto_mixda(model, batch, policy=None, get_ind=False, no_ssl=False):
         return loss
 
 
-def train(model,
-          policy,
-          l_set,
-          w_aug_set,
-          s_aug_set,
-          u_set,
-          v_set,
-          optimizer,
-          policy_optimizer,
-          scheduler=None,
-          policy_scheduler=None,
-          fp16=False,
-          batch_size=32,
-          no_ssl=False):
+def train(
+    model,
+    policy,
+    l_set,
+    w_aug_set,
+    s_aug_set,
+    u_set,
+    v_set,
+    optimizer,
+    policy_optimizer,
+    scheduler=None,
+    policy_scheduler=None,
+    fp16=False,
+    batch_size=32,
+    no_ssl=False,
+):
     """Perform one epoch of AutoMixDA
 
     Args:
@@ -184,11 +186,7 @@ def train(model,
     """
     da_batches = None
     # create the training batches
-    batches = create_batches(l_set,
-                             w_aug_set,
-                             s_aug_set,
-                             u_set,
-                             batch_size)
+    batches = create_batches(l_set, w_aug_set, s_aug_set, u_set, batch_size)
 
     model.train()
     i = 0
@@ -198,11 +196,15 @@ def train(model,
         try:
             da_batch = next(da_batches)
         except:
-            da_batches = iter(data.DataLoader(dataset=v_set,
-                                 batch_size=batch_size,
-                                 shuffle=True,
-                                 num_workers=0,
-                                 collate_fn=v_set.pad))
+            da_batches = iter(
+                data.DataLoader(
+                    dataset=v_set,
+                    batch_size=batch_size,
+                    shuffle=True,
+                    num_workers=0,
+                    collate_fn=v_set.pad,
+                )
+            )
             da_batch = next(da_batches)
 
         words, x, is_heads, tags, mask, y, seqlens, taskname = batch
@@ -215,7 +217,7 @@ def train(model,
         model_values = [p.data.clone() for p in model.parameters()]
 
         # learning rate
-        lr = [group['lr'] for group in optimizer.param_groups]
+        lr = [group["lr"] for group in optimizer.param_groups]
 
         # virtual SGD step
         optimizer.zero_grad()
@@ -242,10 +244,12 @@ def train(model,
             val_loss.backward()
 
         # compute epsilon
-        model_gradients = [p.grad.data.clone() if p.grad is not None \
-                else None for p in model.parameters()]
+        model_gradients = [
+            p.grad.data.clone() if p.grad is not None else None
+            for p in model.parameters()
+        ]
         with torch.no_grad():
-            grad_L2 = torch.zeros(())
+            grad_L2 = torch.zeros((), device=torch.device("cuda"))
             for g in model_gradients:
                 if g is not None:
                     grad_L2 += g.pow(2).sum()
@@ -261,7 +265,9 @@ def train(model,
                         p.data = v + sign * epsilon * g
                     else:
                         p.data = v
-            loss_pm = auto_mixda(model, batch, policy=policy, no_ssl=no_ssl) # using model's batch
+            loss_pm = auto_mixda(
+                model, batch, policy=policy, no_ssl=no_ssl
+            )  # using model's batch
             loss_pm = loss_pm * -sign / 2 / epsilon * lr[0]
             if fp16:
                 with amp.scale_loss(loss_pm, policy_optimizer) as scaled_loss:
@@ -303,14 +309,17 @@ def train(model,
         if i == 0:
             print("=====sanity check======")
             print("words:", words[0])
-            print("x:", x.cpu().numpy()[0][:seqlens[0]])
-            print("tokens:", get_tokenizer().convert_ids_to_tokens(x.cpu().numpy()[0])[:seqlens[0]])
+            print("x:", x.cpu().numpy()[0][: seqlens[0]])
+            print(
+                "tokens:",
+                get_tokenizer().convert_ids_to_tokens(x.cpu().numpy()[0])[: seqlens[0]],
+            )
             print("is_heads:", is_heads[0])
             y_sample = _y.cpu().numpy()[0]
             if np.isscalar(y_sample):
                 print("y:", y_sample)
             else:
-                print("y:", y_sample[:seqlens[0]])
+                print("y:", y_sample[: seqlens[0]])
             print("tags:", tags[0])
             print("mask:", mask[0])
             print("seqlen:", seqlens[0])
@@ -319,28 +328,28 @@ def train(model,
             min_idx = int(ind.argmin().cpu())
             print(ind, ind.max(), ind.min())
             bs = len(words) // 4
-            ds_names = ['original', 'w_aug', 's_aug', 'unlabeled']
-            if 'tagging_' not in taskname:
-                print('good (%s), y=%d: %s' % (ds_names[max_idx // bs], int(_y.cpu()[max_idx]), words[max_idx]))
-                print('bad (%s), y=%d: %s' % (ds_names[min_idx // bs], int(_y.cpu()[min_idx]), words[min_idx]))
+            ds_names = ["original", "w_aug", "s_aug", "unlabeled"]
+            if "tagging_" not in taskname:
+                print(
+                    "good (%s), y=%d: %s"
+                    % (ds_names[max_idx // bs], int(_y.cpu()[max_idx]), words[max_idx])
+                )
+                print(
+                    "bad (%s), y=%d: %s"
+                    % (ds_names[min_idx // bs], int(_y.cpu()[min_idx]), words[min_idx])
+                )
 
             print("=======================")
 
-        if i%10 == 0: # monitoring
+        if i % 10 == 0:  # monitoring
             print(f"step: {i}, task: {taskname}, loss: {loss.item()}")
             del loss
         i += 1
 
 
-def initialize_and_train(task_config,
-                         l_set,
-                         w_aug_set,
-                         s_aug_set,
-                         u_set,
-                         validset,
-                         testset,
-                         hp,
-                         run_tag):
+def initialize_and_train(
+    task_config, l_set, w_aug_set, s_aug_set, u_set, validset, testset, hp, run_tag
+):
     """The train process.
 
     Args:
@@ -359,16 +368,20 @@ def initialize_and_train(task_config,
     """
     # iterators for dev/test set
     padder = SnippextDataset.pad
-    valid_iter = data.DataLoader(dataset=validset,
-                                 batch_size=hp.batch_size,
-                                 shuffle=False,
-                                 num_workers=0,
-                                 collate_fn=padder)
-    test_iter = data.DataLoader(dataset=testset,
-                                 batch_size=hp.batch_size*4,
-                                 shuffle=False,
-                                 num_workers=0,
-                                 collate_fn=padder)
+    valid_iter = data.DataLoader(
+        dataset=validset,
+        batch_size=hp.batch_size,
+        shuffle=False,
+        num_workers=0,
+        collate_fn=padder,
+    )
+    test_iter = data.DataLoader(
+        dataset=testset,
+        batch_size=hp.batch_size * 4,
+        shuffle=False,
+        num_workers=0,
+        collate_fn=padder,
+    )
 
     # initialize model
     if l_set.vocab is None:
@@ -376,12 +389,10 @@ def initialize_and_train(task_config,
     else:
         num_classes = len(l_set.vocab)
 
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    model = MultiTaskNet([task_config], device,
-                         lm=hp.lm, bert_path=hp.bert_path)
-    policy = AugmentPolicyNetV4(num_classes, device,
-                         lm=hp.lm, bert_path=hp.bert_path)
+    model = MultiTaskNet([task_config], device, lm=hp.lm, bert_path=hp.bert_path)
+    policy = AugmentPolicyNetV4(num_classes, device, lm=hp.lm, bert_path=hp.bert_path)
 
     # move to device
     model = model.to(device)
@@ -389,13 +400,11 @@ def initialize_and_train(task_config,
 
     model_optimizer = AdamW(model.parameters(), lr=hp.lr)
     policy_optimizer = AdamW(policy.parameters(), lr=hp.lr)
-    if device == 'cuda' and hp.fp16:
-        model, model_optimizer = amp.initialize(model,
-                                          model_optimizer,
-                                          opt_level='O2')
-        policy, policy_optimizer = amp.initialize(policy,
-                                          policy_optimizer,
-                                          opt_level='O2')
+    if device == "cuda" and hp.fp16:
+        model, model_optimizer = amp.initialize(model, model_optimizer, opt_level="O2")
+        policy, policy_optimizer = amp.initialize(
+            policy, policy_optimizer, opt_level="O2"
+        )
 
     # create logging
     if not os.path.exists(hp.logdir):
@@ -410,38 +419,44 @@ def initialize_and_train(task_config,
     if hp.warmup:
         # learning rate scheduler
         num_steps = (len(l_set) // hp.batch_size) * hp.n_epochs // 2
-        scheduler = get_linear_schedule_with_warmup(model_optimizer,
-                                                    num_warmup_steps=num_steps // 10,
-                                                    num_training_steps=num_steps)
+        scheduler = get_linear_schedule_with_warmup(
+            model_optimizer,
+            num_warmup_steps=num_steps // 10,
+            num_training_steps=num_steps,
+        )
 
         while epoch <= hp.n_epochs // 2:
-            train_baseline(model,
-                  l_set,
-                  model_optimizer,
-                  scheduler=scheduler,
-                  batch_size=hp.batch_size,
-                  fp16=hp.fp16)
+            train_baseline(
+                model,
+                l_set,
+                model_optimizer,
+                scheduler=scheduler,
+                batch_size=hp.batch_size,
+                fp16=hp.fp16,
+            )
 
             print(f"=========eval at epoch={epoch}=========")
-            dev_f1, test_f1 = eval_on_task(epoch,
-                                model,
-                                task_config['name'],
-                                valid_iter,
-                                validset,
-                                test_iter,
-                                testset,
-                                writer,
-                                run_tag)
+            dev_f1, test_f1 = eval_on_task(
+                epoch,
+                model,
+                task_config["name"],
+                valid_iter,
+                validset,
+                test_iter,
+                testset,
+                writer,
+                run_tag,
+            )
 
             # if dev_f1 > 1e-6:
             epoch += 1
             if hp.save_model:
                 if dev_f1 > best_dev_f1:
                     best_dev_f1 = dev_f1
-                    torch.save(model.state_dict(), run_tag + '_dev.pt')
+                    torch.save(model.state_dict(), run_tag + "_dev.pt")
                 if test_f1 > best_test_f1:
                     best_test_f1 = dev_f1
-                    torch.save(model.state_dict(), run_tag + '_test.pt')
+                    torch.save(model.state_dict(), run_tag + "_test.pt")
     # Testing
     # policy.bert = model.bert
 
@@ -451,50 +466,53 @@ def initialize_and_train(task_config,
     else:
         num_steps = (4 * len(l_set) // hp.batch_size) * hp.n_epochs
 
-    model_scheduler = get_linear_schedule_with_warmup(model_optimizer,
-                                      num_warmup_steps=0,
-                                      num_training_steps=num_steps)
-    policy_scheduler = get_linear_schedule_with_warmup(policy_optimizer,
-                                      num_warmup_steps=0,
-                                      num_training_steps=num_steps)
-
+    model_scheduler = get_linear_schedule_with_warmup(
+        model_optimizer, num_warmup_steps=0, num_training_steps=num_steps
+    )
+    policy_scheduler = get_linear_schedule_with_warmup(
+        policy_optimizer, num_warmup_steps=0, num_training_steps=num_steps
+    )
 
     # best_dev_f1 = best_test_f1 = 0.0
     # train the model and policy
     while epoch <= hp.n_epochs:
-        train(model,
-              policy,
-              l_set,
-              w_aug_set,
-              s_aug_set,
-              u_set,
-              validset,
-              model_optimizer,
-              policy_optimizer,
-              scheduler=model_scheduler,
-              policy_scheduler=policy_scheduler,
-              fp16=hp.fp16,
-              batch_size=hp.batch_size,
-              no_ssl=(hp.no_ssl or 'no_ssl' in hp.da))
+        train(
+            model,
+            policy,
+            l_set,
+            w_aug_set,
+            s_aug_set,
+            u_set,
+            validset,
+            model_optimizer,
+            policy_optimizer,
+            scheduler=model_scheduler,
+            policy_scheduler=policy_scheduler,
+            fp16=hp.fp16,
+            batch_size=hp.batch_size,
+            no_ssl=(hp.no_ssl or "no_ssl" in hp.da),
+        )
 
         print(f"=========eval at epoch={epoch}=========")
-        dev_f1, test_f1 = eval_on_task(epoch,
-                            model,
-                            task_config['name'],
-                            valid_iter,
-                            validset,
-                            test_iter,
-                            testset,
-                            writer,
-                            run_tag)
+        dev_f1, test_f1 = eval_on_task(
+            epoch,
+            model,
+            task_config["name"],
+            valid_iter,
+            validset,
+            test_iter,
+            testset,
+            writer,
+            run_tag,
+        )
 
         if hp.save_model:
             if dev_f1 > best_dev_f1:
                 best_dev_f1 = dev_f1
-                torch.save(model.state_dict(), run_tag + '_dev.pt')
+                torch.save(model.state_dict(), run_tag + "_dev.pt")
             if test_f1 > best_test_f1:
                 best_test_f1 = test_f1
-                torch.save(model.state_dict(), run_tag + '_test.pt')
+                torch.save(model.state_dict(), run_tag + "_test.pt")
         epoch += 1
 
     writer.close()

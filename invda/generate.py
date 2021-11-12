@@ -1,12 +1,12 @@
-import torch
-import sys
-import os
-import jsonlines
 import argparse
-import spacy
+import os
 
+import jsonlines
+import spacy
+import torch
 from tqdm import tqdm
-from transformers import T5ForConditionalGeneration,T5Tokenizer
+from transformers import T5ForConditionalGeneration, T5Tokenizer
+
 
 def set_seed(seed):
     """set seeds"""
@@ -15,12 +15,12 @@ def set_seed(seed):
         torch.cuda.manual_seed_all(seed)
 
 
-nlp = spacy.load('en_core_web_sm')
+nlp = spacy.load("en_core_web_sm")
+
 
 def dump_output(fn, results):
-    """Dump augmentations to a jsonline file
-    """
-    with jsonlines.open(fn + '.augment.jsonl', mode='w') as writer:
+    """Dump augmentations to a jsonline file"""
+    with jsonlines.open(fn + ".augment.jsonl", mode="w") as writer:
         for res in results:
             writer.write(res)
 
@@ -37,13 +37,12 @@ def generate(model, tokenizer, device, sentence):
     Returns:
         List of str: the augmentations
     """
-    text =  "corrupt: " + sentence + " </s>"
+    text = "corrupt: " + sentence + " </s>"
     max_len = 256
 
-    encoding = tokenizer.encode_plus(text,
-                                     max_length=max_len,
-                                     truncation=True,
-                                     pad_to_max_length=True)
+    encoding = tokenizer.encode_plus(
+        text, max_length=max_len, truncation=True, pad_to_max_length=True
+    )
     input_ids = torch.LongTensor([encoding["input_ids"]]).to(device)
     attention_masks = torch.LongTensor([encoding["attention_mask"]]).to(device)
 
@@ -57,15 +56,16 @@ def generate(model, tokenizer, device, sentence):
             top_k=120,
             top_p=0.98,
             early_stopping=True,
-            num_return_sequences=50)
+            num_return_sequences=50,
+        )
 
     has_output = False
     result = []
     used = set([sentence.lower()])
     for beam_output in beam_outputs:
-        sent = tokenizer.decode(beam_output,
-                        skip_special_tokens=True,
-                        clean_up_tokenization_spaces=True)
+        sent = tokenizer.decode(
+            beam_output, skip_special_tokens=True, clean_up_tokenization_spaces=True
+        )
         sl = sent.lower()
         if sl not in used:
             has_output = True
@@ -84,22 +84,21 @@ def process_cls(fn):
         None
     """
     print(fn)
-    if os.path.exists(fn + '.augment.jsonl'):
+    if os.path.exists(fn + ".augment.jsonl"):
         return
     results = []
     for sid, line in enumerate(tqdm(open(fn))):
         # process at most 10000 entries
         if sid >= 10000:
             break
-        LL = line.strip().split('\t')
+        LL = line.strip().split("\t")
         if len(LL) < 2:
             continue
         sentence, label = LL[0], LL[-1]
         res = generate(model, tokenizer, device, sentence)
-        results.append({'sid': sid,
-            'original': sentence,
-            'augment': res,
-            'label': label})
+        results.append(
+            {"sid": sid, "original": sentence, "augment": res, "label": label}
+        )
 
     dump_output(fn, results)
 
@@ -114,37 +113,36 @@ def process_em(fn, size=1000):
         None
     """
     print(fn)
-    if os.path.exists(fn + '.augment.jsonl'):
+    if os.path.exists(fn + ".augment.jsonl"):
         return
     results = []
     for sid, line in enumerate(tqdm(open(fn))):
         if sid >= size:
             break
-        LL = line.strip().split('\t')
+        LL = line.strip().split("\t")
         if len(LL) < 2:
             continue
-        if len(LL) == 2 or LL[1].strip() == '':
+        if len(LL) == 2 or LL[1].strip() == "":
             sentence, label = LL[0], LL[-1]
             res = generate(model, tokenizer, device, sentence)
         else:
-            sentence, label = ' *** '.join(LL[:2]), LL[-1]
+            sentence, label = " *** ".join(LL[:2]), LL[-1]
             res = generate(model, tokenizer, device, sentence)
-            sentence = sentence.replace('***', '\t')
-            res = [s.replace('***', '\t') for s in res if '***' in s]
+            sentence = sentence.replace("***", "\t")
+            res = [s.replace("***", "\t") for s in res if "***" in s]
 
-        results.append({'sid': sid,
-            'original': sentence,
-            'augment': res,
-            'label': label})
+        results.append(
+            {"sid": sid, "original": sentence, "augment": res, "label": label}
+        )
 
     dump_output(fn, results)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", type=str, default=None)
-    parser.add_argument("--model_path", type=str, default='t5_corrupt')
-    parser.add_argument("--type", type=str, default='cls')
+    parser.add_argument("--model_path", type=str, default="t5_corrupt")
+    parser.add_argument("--type", type=str, default="cls")
     hp = parser.parse_args()
 
     # optional: set seeds for reproducibility
@@ -152,14 +150,14 @@ if __name__ == '__main__':
 
     # t5 model and tokenizer
     model = T5ForConditionalGeneration.from_pretrained(hp.model_path)
-    tokenizer = T5Tokenizer.from_pretrained('t5-base')
+    tokenizer = T5Tokenizer.from_pretrained("t5-base")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
     model.eval()
 
     # handling two types of input format
     fn = hp.input
-    if hp.type == 'cls':
+    if hp.type == "cls":
         process_cls(fn)
-    if hp.type == 'em':
+    if hp.type == "em":
         process_em(fn)

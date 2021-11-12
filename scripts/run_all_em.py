@@ -5,20 +5,21 @@ em_Walmart-Amazon
 em_Abt-Buy
 em_DBLP-ACM-dirty
 em_DBLP-GoogleScholar-dirty
-em_Walmart-Amazon-dirty""".split('\n')
+em_Walmart-Amazon-dirty""".split(
+    "\n"
+)
 
-result_path = 'results_em/'
+result_path = "results_em/"
 sizes = [300, 450, 600, 750]
-lm = 'roberta'
+lm = "roberta"
 batch_size = 32
 n_epochs_list = [20, 20, 20, 20]
 
 import os
-import time
 
-for da in ['None', 'edbt20', 'del', 'invda', 'auto_ssl_no_ssl', 'auto_ssl']:
-    if 'no_ssl' in da:
-        da = da.replace('_no_ssl', '')
+for da in ["None", "edbt20", "del", "invda", "auto_ssl_no_ssl", "auto_ssl"]:
+    if "no_ssl" in da:
+        da = da.replace("_no_ssl", "")
         no_ssl = True
     else:
         no_ssl = False
@@ -26,7 +27,7 @@ for da in ['None', 'edbt20', 'del', 'invda', 'auto_ssl_no_ssl', 'auto_ssl']:
     for dataset in datasets:
         for n_epochs, size in zip(n_epochs_list, sizes):
             for run_id in range(5):
-                cmd = """CUDA_VISIBLE_DEVICES=2 python train_any.py \
+                cmd = """CUDA_VISIBLE_DEVICES=0 python train_any.py \
               --task %s \
               --logdir %s/ \
               --finetuning \
@@ -38,18 +39,26 @@ for da in ['None', 'edbt20', 'del', 'invda', 'auto_ssl_no_ssl', 'auto_ssl']:
               --da %s \
               --size %d \
               --max_len 128 \
-              --run_id %d""" % (dataset, result_path, batch_size,
-                      lm, n_epochs, da, size, run_id)
+              --run_id %d""" % (
+                    dataset,
+                    result_path,
+                    batch_size,
+                    lm,
+                    n_epochs,
+                    da,
+                    size,
+                    run_id,
+                )
                 if no_ssl:
-                    cmd += ' --no_ssl'
-                if 'auto_ssl' in da:
-                    cmd += ' --balance'
+                    cmd += " --no_ssl"
+                if "auto_ssl" in da:
+                    cmd += " --balance"
                 print(cmd)
                 os.system(cmd)
 
 # Note: use this hyperparameter set (no balancing but with warmup) for Walmart-Amazon and Walmart-Amazon-dirty
 #
-# CUDA_VISIBLE_DEVICES=2 python train_any.py \
+# CUDA_VISIBLE_DEVICES=0 python train_any.py \
 # --task em_Walmart-Amazon-dirty \
 # --logdir results_em_tmp/ \
 # --finetuning \
@@ -66,10 +75,10 @@ for da in ['None', 'edbt20', 'del', 'invda', 'auto_ssl_no_ssl', 'auto_ssl']:
 
 # DM + RoBERTa
 for dataset in datasets:
-    dataset = dataset.replace('em_', '')
+    dataset = dataset.replace("em_", "")
     for n_epochs, size in zip(n_epochs_list, sizes):
         for run_id in range(5):
-            cmd = """CUDA_VISIBLE_DEVICES=2 python ditto/dm.py \
+            cmd = """CUDA_VISIBLE_DEVICES=0 python ditto/dm.py \
           --task %s \
           --logdir %s/ \
           --batch_size %d \
@@ -79,7 +88,14 @@ for dataset in datasets:
           --n_epochs %d \
           --size %d \
           --max_len 128 \
-          --run_id %d""" % (dataset, result_path, batch_size,
-                  lm, n_epochs, size, run_id)
+          --run_id %d""" % (
+                dataset,
+                result_path,
+                batch_size,
+                lm,
+                n_epochs,
+                size,
+                run_id,
+            )
             print(cmd)
             os.system(cmd)

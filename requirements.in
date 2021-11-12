@@ -1,0 +1,24 @@
+--find-links https://download.pytorch.org/whl/cu111/torch_stable.html
+
+# ---- ML
+numpy
+pytorch-lightning==1.1.6
+scipy
+sentencepiece
+sklearn
+spacy
+tensorboardX
+torch
+transformers
+
+# ---- NLP
+nltk
+gensim
+
+# ---- Utility
+jsonlines
+regex
+tqdm
+
+# ---- Other
+pip-tools

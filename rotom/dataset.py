@@ -1,16 +1,15 @@
-import numpy as np
-import torch
-import sys
 import random
+import sys
+
 import jsonlines
 
-from torch.utils import data
 from .augment import Augmenter
 
 sys.path.insert(0, "Snippext_public")
-from snippext.dataset import SnippextDataset, get_tokenizer
-from transformers.data import glue_processors
 from transformers import InputExample
+
+from snippext.dataset import SnippextDataset, get_tokenizer
+
 
 class BaseDataset(SnippextDataset):
     def __len__(self):
@@ -44,11 +43,11 @@ class BaseDataset(SnippextDataset):
         """
         text_a = self.examples[idx].text_a
         text_b = self.examples[idx].text_b
-        if text_b is not None and text_b.strip() == '':
+        if text_b is not None and text_b.strip() == "":
             text_b = None
         label = self.examples[idx].label
 
-        if len(ops) > 0 and ops[0][0] == 't5':
+        if len(ops) > 0 and ops[0][0] == "t5":
             examples = self.t5_examples[idx]
             if len(examples) > 0:
                 if aug_idx is None:
@@ -59,41 +58,43 @@ class BaseDataset(SnippextDataset):
                 text_b = e.text_b
         elif len(ops) > 0:
             if text_b is not None:
-                combined = text_a + ' [SEP] ' + text_b
+                combined = text_a + " [SEP] " + text_b
             else:
                 combined = text_a
 
             for op_args in ops:
                 op, args = op_args
-                combined = self.augmenter\
-                    .augment_sent(combined, op, args=args)
+                combined = self.augmenter.augment_sent(combined, op, args=args)
 
             if text_b is not None:
-                if ' [SEP] ' in combined:
-                    text_a, text_b = combined.split(' [SEP] ')
+                if " [SEP] " in combined:
+                    text_a, text_b = combined.split(" [SEP] ")
             else:
                 text_a = combined
 
-        x = self.tokenizer.encode(text=text_a,
-                text_pair=text_b,
-                add_special_tokens=True,
-                truncation=True,
-                truncation_strategy='longest_first',
-                max_length=self.max_len)
+        x = self.tokenizer.encode(
+            text=text_a,
+            text_pair=text_b,
+            add_special_tokens=True,
+            truncation=True,
+            truncation_strategy="longest_first",
+            max_length=self.max_len,
+        )
 
         if self.tag2idx is None:
             # regression
             y = float(label)
         else:
             if label in self.tag2idx:
-                y = self.tag2idx[label] # label
+                y = self.tag2idx[label]  # label
             else:
                 y = 0
         is_heads = [1] * len(x)
         mask = [1] * len(x)
 
-        assert len(x)==len(mask)==len(is_heads), \
-          f"len(x)={len(x)}, len(y)={len(y)}, len(is_heads)={len(is_heads)}"
+        assert (
+            len(x) == len(mask) == len(is_heads)
+        ), f"len(x)={len(x)}, len(y)={len(y)}, len(is_heads)={len(is_heads)}"
         # seqlen
         seqlen = len(mask)
 
@@ -101,15 +102,22 @@ class BaseDataset(SnippextDataset):
         if text_b is None:
             log_text = text_a
         else:
-            log_text = text_a + ' [SEP] ' + text_b
+            log_text = text_a + " [SEP] " + text_b
 
-        return log_text, x, is_heads, label, mask,\
-               y, seqlen, self.taskname
+        return log_text, x, is_heads, label, mask, y, seqlen, self.taskname
 
 
 class TextCLSDataset(BaseDataset):
-    def __init__(self, path, vocab, taskname, max_len=512,
-            lm='distilbert', augment_op=None, size=None):
+    def __init__(
+        self,
+        path,
+        vocab,
+        taskname,
+        max_len=512,
+        lm="distilbert",
+        augment_op=None,
+        size=None,
+    ):
         self.taskname = taskname
         self.vocab = vocab
         self.max_len = max_len
@@ -117,7 +125,7 @@ class TextCLSDataset(BaseDataset):
         # read path
         self.examples = []
         for uid, line in enumerate(open(path)):
-            LL = line.strip().split('\t')
+            LL = line.strip().split("\t")
             if len(LL) == 2:
                 e = InputExample(uid, LL[0], None, LL[1])
             elif len(LL) == 3:
@@ -139,20 +147,19 @@ class TextCLSDataset(BaseDataset):
         self.augment_op = augment_op
 
         # read the augment index
-        if augment_op == 't5':
+        if augment_op == "t5":
             self.t5_examples = []
-            with jsonlines.open(path + '.augment.jsonl', mode='r') as reader:
+            with jsonlines.open(path + ".augment.jsonl", mode="r") as reader:
                 for row in reader:
                     exms = []
-                    for sent in row['augment']:
-                        LL = sent.split('\t')
+                    for sent in row["augment"]:
+                        LL = sent.split("\t")
                         if len(LL) == 0:
                             continue
-                        label = row['label']
+                        label = row["label"]
                         if len(LL) > 1:
                             e = InputExample(uid, LL[0], LL[1], label)
                         else:
                             e = InputExample(uid, LL[0], None, label)
                         exms.append(e)
                     self.t5_examples.append(exms)
-
