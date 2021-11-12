@@ -1,58 +1,71 @@
 import torch
 import torch.nn as nn
-from transformers import BertModel, AlbertModel, DistilBertModel, RobertaModel, XLNetModel, LongformerModel
+from transformers import (AlbertModel, BertModel, DistilBertModel,
+                          RobertaModel, XLNetModel)
 
-model_ckpts = {'bert': "bert-base-uncased",
-               'albert': "albert-base-v2",
-               'roberta': "roberta-base",
-               'xlnet': "xlnet-base-cased",
-               'distilbert': "distilbert-base-uncased",
-               'longformer': "allenai/longformer-base-4096"}
+model_ckpts = {
+    "bert": "bert-base-uncased",
+    "albert": "albert-base-v2",
+    "roberta": "roberta-base",
+    "xlnet": "xlnet-base-cased",
+    "distilbert": "distilbert-base-uncased",
+    "longformer": "allenai/longformer-base-4096",
+}
+
 
 class MultiTaskNet(nn.Module):
-    def __init__(self, task_configs=[],
-                 device='cpu',
-                 finetuning=True,
-                 lm='bert',
-                 bert_pt=None,
-                 bert_path=None):
+    def __init__(
+        self,
+        task_configs=[],
+        device="cpu",
+        finetuning=True,
+        lm="bert",
+        bert_pt=None,
+        bert_path=None,
+    ):
         super().__init__()
 
         assert len(task_configs) > 0
 
         # load the model or model checkpoint
         if bert_path == None:
-            if lm == 'bert':
+            if lm == "bert":
                 self.bert = BertModel.from_pretrained(model_ckpts[lm])
-            elif lm == 'distilbert':
+            elif lm == "distilbert":
                 self.bert = DistilBertModel.from_pretrained(model_ckpts[lm])
-            elif lm == 'albert':
+            elif lm == "albert":
                 self.bert = AlbertModel.from_pretrained(model_ckpts[lm])
-            elif lm == 'xlnet':
+            elif lm == "xlnet":
                 self.bert = XLNetModel.from_pretrained(model_ckpts[lm])
-            elif lm == 'roberta':
+            elif lm == "roberta":
                 self.bert = RobertaModel.from_pretrained(model_ckpts[lm])
-            elif lm == 'longformer':
+            elif lm == "longformer":
                 self.bert = RobertaModel.from_pretrained(model_ckpts[lm])
         else:
             output_model_file = bert_path
-            model_state_dict = torch.load(output_model_file,
-                                          map_location=lambda storage, loc: storage)
-            if lm == 'bert':
-                self.bert = BertModel.from_pretrained(model_ckpts[lm],
-                        state_dict=model_state_dict)
-            elif lm == 'distilbert':
-                self.bert = DistilBertModel.from_pretrained(model_ckpts[lm],
-                        state_dict=model_state_dict)
-            elif lm == 'albert':
-                self.bert = AlbertModel.from_pretrained(model_ckpts[lm],
-                        state_dict=model_state_dict)
-            elif lm == 'xlnet':
-                self.bert = XLNetModel.from_pretrained(model_ckpts[lm],
-                        state_dict=model_state_dict)
-            elif lm == 'roberta':
-                self.bert = RobertaModel.from_pretrained(model_ckpts[lm],
-                        state_dict=model_state_dict)
+            model_state_dict = torch.load(
+                output_model_file, map_location=lambda storage, loc: storage
+            )
+            if lm == "bert":
+                self.bert = BertModel.from_pretrained(
+                    model_ckpts[lm], state_dict=model_state_dict
+                )
+            elif lm == "distilbert":
+                self.bert = DistilBertModel.from_pretrained(
+                    model_ckpts[lm], state_dict=model_state_dict
+                )
+            elif lm == "albert":
+                self.bert = AlbertModel.from_pretrained(
+                    model_ckpts[lm], state_dict=model_state_dict
+                )
+            elif lm == "xlnet":
+                self.bert = XLNetModel.from_pretrained(
+                    model_ckpts[lm], state_dict=model_state_dict
+                )
+            elif lm == "roberta":
+                self.bert = RobertaModel.from_pretrained(
+                    model_ckpts[lm], state_dict=model_state_dict
+                )
 
         self.device = device
         self.finetuning = finetuning
@@ -64,32 +77,35 @@ class MultiTaskNet(nn.Module):
         hidden_dropout_prob = 0.1
 
         for config in task_configs:
-            name = config['name']
-            task_type = config['task_type']
-            vocab = config['vocab']
+            name = config["name"]
+            task_type = config["task_type"]
+            vocab = config["vocab"]
 
-            if task_type == 'tagging':
+            if task_type == "tagging":
                 # for tagging
-                vocab_size = len(vocab) # 'O' and '<PAD>'
-                if 'O' not in vocab:
+                vocab_size = len(vocab)  # 'O' and '<PAD>'
+                if "O" not in vocab:
                     vocab_size += 1
-                if '<PAD>' not in vocab:
+                if "<PAD>" not in vocab:
                     vocab_size += 1
             else:
                 # for pairing and classification
                 vocab_size = len(vocab)
 
-            self.module_dict['%s_dropout' % name] = nn.Dropout(hidden_dropout_prob)
-            self.module_dict['%s_fc' % name] = nn.Linear(hidden_size, vocab_size)
+            self.module_dict["%s_dropout" % name] = nn.Dropout(hidden_dropout_prob)
+            self.module_dict["%s_fc" % name] = nn.Linear(hidden_size, vocab_size)
 
-
-    def forward(self, x, y,
-                augment_batch=None,
-                aug_enc=None,
-                second_batch=None,
-                x_enc=None,
-                task='hotel_tagging',
-                get_enc=False):
+    def forward(
+        self,
+        x,
+        y,
+        augment_batch=None,
+        aug_enc=None,
+        second_batch=None,
+        x_enc=None,
+        task="hotel_tagging",
+        get_enc=False,
+    ):
         """Forward function of the BERT models for classification/tagging.
 
         Args:
@@ -118,10 +134,10 @@ class MultiTaskNet(nn.Module):
             aug_x = aug_x.to(self.device)
             aug_lam = torch.tensor(aug_lam).to(self.device)
 
-        dropout = self.module_dict[task + '_dropout']
-        fc = self.module_dict[task + '_fc']
+        dropout = self.module_dict[task + "_dropout"]
+        fc = self.module_dict[task + "_fc"]
 
-        if 'tagging' in task: # TODO: this needs to be changed later
+        if "tagging" in task:  # TODO: this needs to be changed later
             if self.training and self.finetuning:
                 self.bert.train()
                 if x_enc is None:
@@ -138,8 +154,8 @@ class MultiTaskNet(nn.Module):
             if augment_batch != None:
                 if aug_enc is None:
                     aug_enc = self.bert(aug_x)[0]
-                enc[:aug_x.shape[0]] *= aug_lam
-                enc[:aug_x.shape[0]] += aug_enc * (1 - aug_lam)
+                enc[: aug_x.shape[0]] *= aug_lam
+                enc[: aug_x.shape[0]] += aug_enc * (1 - aug_lam)
 
             if second_batch != None:
                 enc = enc * lam + enc[index] * (1 - lam)
@@ -170,14 +186,14 @@ class MultiTaskNet(nn.Module):
             if augment_batch != None:
                 if aug_enc is None:
                     aug_enc = self.bert(aug_x)[0][:, 0, :]
-                pooled_output[:aug_x.shape[0]] *= aug_lam
-                pooled_output[:aug_x.shape[0]] += aug_enc * (1 - aug_lam)
+                pooled_output[: aug_x.shape[0]] *= aug_lam
+                pooled_output[: aug_x.shape[0]] += aug_enc * (1 - aug_lam)
 
             if second_batch != None:
                 pooled_output = pooled_output * lam + pooled_output[index] * (1 - lam)
 
             logits = fc(pooled_output)
-            if 'sts-b' in task:
+            if "sts-b" in task:
                 y_hat = logits
             else:
                 y_hat = logits.argmax(-1)

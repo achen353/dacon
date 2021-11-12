@@ -1,21 +1,18 @@
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
 import os
-import numpy as np
-import argparse
-import json
-import copy
 import random
 
+import numpy as np
+import torch
+import torch.nn as nn
+from tensorboardX import SummaryWriter
 from torch.utils import data
+from transformers import AdamW, get_linear_schedule_with_warmup
+
+from apex import amp
+
+from .dataset import *
 from .model import MultiTaskNet
 from .train_util import *
-from .dataset import *
-from tensorboardX import SummaryWriter
-from transformers import AdamW, get_constant_schedule_with_warmup, get_linear_schedule_with_warmup
-from apex import amp
 
 # criterion for tagging
 tagging_criterion = nn.CrossEntropyLoss(ignore_index=0)
@@ -25,6 +22,7 @@ classifier_criterion = nn.CrossEntropyLoss()
 
 # criterion for regression
 regression_criterion = nn.MSELoss()
+
 
 def mixda(model, batch, alpha_aug=0.4):
     """Perform one iteration of MixDA
@@ -51,10 +49,8 @@ def mixda(model, batch, alpha_aug=0.4):
     x = x[:batch_size]
 
     # back prop
-    logits, y, _ = model(x, y,
-                         augment_batch=(aug_x, aug_lam),
-                         task=taskname)
-    if 'sts-b' in taskname:
+    logits, y, _ = model(x, y, augment_batch=(aug_x, aug_lam), task=taskname)
+    if "sts-b" in taskname:
         logits = logits.view(-1)
     else:
         logits = logits.view(-1, logits.shape[-1])
@@ -65,16 +61,15 @@ def mixda(model, batch, alpha_aug=0.4):
     y = y.view(-1)
 
     # cross entropy
-    if 'tagging' in taskname:
+    if "tagging" in taskname:
         criterion = tagging_criterion
-    elif 'sts-b' in taskname:
+    elif "sts-b" in taskname:
         criterion = regression_criterion
     else:
         criterion = classifier_criterion
 
     # mix the labels
-    loss = criterion(logits, y) * aug_lam + \
-           criterion(logits, aug_y) * (1 - aug_lam)
+    loss = criterion(logits, y) * aug_lam + criterion(logits, aug_y) * (1 - aug_lam)
 
     return loss
 
@@ -115,11 +110,16 @@ def create_mixda_batches(l_set, aug_set, batch_size=16):
     return mixed_batches
 
 
-def train(model, l_set, aug_set, optimizer,
-          scheduler=None,
-          fp16=False,
-          batch_size=32,
-          alpha_aug=0.8):
+def train(
+    model,
+    l_set,
+    aug_set,
+    optimizer,
+    scheduler=None,
+    fp16=False,
+    batch_size=32,
+    alpha_aug=0.8,
+):
     """Perform one epoch of MixDA
 
     Args:
@@ -134,9 +134,7 @@ def train(model, l_set, aug_set, optimizer,
     Returns:
         None
     """
-    mixda_batches = create_mixda_batches(l_set,
-                                         aug_set,
-                                         batch_size=batch_size)
+    mixda_batches = create_mixda_batches(l_set, aug_set, batch_size=batch_size)
 
     model.train()
     for i, batch in enumerate(mixda_batches):
@@ -160,33 +158,31 @@ def train(model, l_set, aug_set, optimizer,
         if i == 0:
             print("=====sanity check======")
             print("words:", words[0])
-            print("x:", x.cpu().numpy()[0][:seqlens[0]])
-            print("tokens:", get_tokenizer().convert_ids_to_tokens(x.cpu().numpy()[0])[:seqlens[0]])
+            print("x:", x.cpu().numpy()[0][: seqlens[0]])
+            print(
+                "tokens:",
+                get_tokenizer().convert_ids_to_tokens(x.cpu().numpy()[0])[: seqlens[0]],
+            )
             print("is_heads:", is_heads[0])
             y_sample = _y.cpu().numpy()[0]
             if np.isscalar(y_sample):
                 print("y:", y_sample)
             else:
-                print("y:", y_sample[:seqlens[0]])
+                print("y:", y_sample[: seqlens[0]])
             print("tags:", tags[0])
             print("mask:", mask[0])
             print("seqlen:", seqlens[0])
             print("task_name:", taskname)
             print("=======================")
 
-        if i%10 == 0: # monitoring
+        if i % 10 == 0:  # monitoring
             print(f"step: {i}, task: {taskname}, loss: {loss.item()}")
             del loss
 
 
-
-def initialize_and_train(task_config,
-                         trainset,
-                         augmentset,
-                         validset,
-                         testset,
-                         hp,
-                         run_tag):
+def initialize_and_train(
+    task_config, trainset, augmentset, validset, testset, hp, run_tag
+):
     """The train process.
 
     Args:
@@ -204,36 +200,41 @@ def initialize_and_train(task_config,
     padder = SnippextDataset.pad
 
     # iterators for dev/test set
-    valid_iter = data.DataLoader(dataset=validset,
-                                 batch_size=hp.batch_size * 4,
-                                 shuffle=False,
-                                 num_workers=0,
-                                 collate_fn=padder)
-    test_iter = data.DataLoader(dataset=testset,
-                                 batch_size=hp.batch_size * 4,
-                                 shuffle=False,
-                                 num_workers=0,
-                                 collate_fn=padder)
-
+    valid_iter = data.DataLoader(
+        dataset=validset,
+        batch_size=hp.batch_size * 4,
+        shuffle=False,
+        num_workers=0,
+        collate_fn=padder,
+    )
+    test_iter = data.DataLoader(
+        dataset=testset,
+        batch_size=hp.batch_size * 4,
+        shuffle=False,
+        num_workers=0,
+        collate_fn=padder,
+    )
 
     # initialize model
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    if device == 'cpu':
-        model = MultiTaskNet([task_config], device,
-                         hp.finetuning, lm=hp.lm, bert_path=hp.bert_path)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    if device == "cpu":
+        model = MultiTaskNet(
+            [task_config], device, hp.finetuning, lm=hp.lm, bert_path=hp.bert_path
+        )
         optimizer = AdamW(model.parameters(), lr=hp.lr)
     else:
-        model = MultiTaskNet([task_config], device,
-                         hp.finetuning, lm=hp.lm, bert_path=hp.bert_path).cuda()
+        model = MultiTaskNet(
+            [task_config], device, hp.finetuning, lm=hp.lm, bert_path=hp.bert_path
+        ).cuda()
         optimizer = AdamW(model.parameters(), lr=hp.lr)
         if hp.fp16:
-            model, optimizer = amp.initialize(model, optimizer, opt_level='O2')
+            model, optimizer = amp.initialize(model, optimizer, opt_level="O2")
 
     # learning rate scheduler
     num_steps = (len(trainset) // hp.batch_size) * hp.n_epochs
-    scheduler = get_linear_schedule_with_warmup(optimizer,
-                                                num_warmup_steps=num_steps / 10,
-                                                num_training_steps=num_steps)
+    scheduler = get_linear_schedule_with_warmup(
+        optimizer, num_warmup_steps=num_steps / 10, num_training_steps=num_steps
+    )
     # scheduler = get_constant_schedule_with_warmup(optimizer,
     #                                             num_warmup_steps=num_steps / 10)
     # create logging
@@ -245,25 +246,29 @@ def initialize_and_train(task_config,
     best_dev_f1 = best_test_f1 = 0.0
     epoch = 1
     while epoch <= hp.n_epochs:
-        train(model,
-              trainset,
-              augmentset,
-              optimizer,
-              scheduler=scheduler,
-              fp16=hp.fp16,
-              batch_size=hp.batch_size,
-              alpha_aug=hp.alpha_aug)
+        train(
+            model,
+            trainset,
+            augmentset,
+            optimizer,
+            scheduler=scheduler,
+            fp16=hp.fp16,
+            batch_size=hp.batch_size,
+            alpha_aug=hp.alpha_aug,
+        )
 
         print(f"=========eval at epoch={epoch}=========")
-        dev_f1, test_f1 = eval_on_task(epoch,
-                            model,
-                            task_config['name'],
-                            valid_iter,
-                            validset,
-                            test_iter,
-                            testset,
-                            writer,
-                            run_tag)
+        dev_f1, test_f1 = eval_on_task(
+            epoch,
+            model,
+            task_config["name"],
+            valid_iter,
+            validset,
+            test_iter,
+            testset,
+            writer,
+            run_tag,
+        )
 
         # skip the epochs with zero f1
         # if dev_f1 > 1e-6:
@@ -271,10 +276,9 @@ def initialize_and_train(task_config,
         if hp.save_model:
             if dev_f1 > best_dev_f1:
                 best_dev_f1 = dev_f1
-                torch.save(model.state_dict(), run_tag + '_dev.pt')
+                torch.save(model.state_dict(), run_tag + "_dev.pt")
             if test_f1 > best_test_f1:
                 best_test_f1 = dev_f1
-                torch.save(model.state_dict(), run_tag + '_test.pt')
+                torch.save(model.state_dict(), run_tag + "_test.pt")
 
     writer.close()
-

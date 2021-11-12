@@ -1,22 +1,19 @@
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
 import os
-import numpy as np
-import argparse
-import json
-import copy
 import random
 
-from torch.utils import data
+import numpy as np
+import torch
+import torch.nn.functional as F
 from tensorboardX import SummaryWriter
+from torch.utils import data
 from transformers import AdamW, get_linear_schedule_with_warmup
+
 from apex import amp
 
+from .dataset import *
 from .model import MultiTaskNet
 from .train_util import *
-from .dataset import *
+
 
 def tagging_criterion(pred_labeled, y_labeled):
     """The loss function for tagging task (with float tensor input)
@@ -31,6 +28,7 @@ def tagging_criterion(pred_labeled, y_labeled):
     # cross-entropy, ignore the 0 class
     loss_x = torch.sum(-y_labeled[:, 1:] * pred_labeled[:, 1:].log(), -1).mean()
     return loss_x
+
 
 def classifier_criterion(pred_labeled, y_labeled):
     """The loss function for classification task (with float tensor input)
@@ -69,25 +67,24 @@ def mixmatch(model, batch, num_aug=2, alpha=0.4, alpha_aug=0.4, u_lambda=0.5):
     y = y[:batch_size]
 
     # the unlabeled half
-    u0 = x[batch_size:2*batch_size]
+    u0 = x[batch_size : 2 * batch_size]
 
     # augmented
-    aug_x = x[2*batch_size:3*batch_size]
+    aug_x = x[2 * batch_size : 3 * batch_size]
 
     # augmented unlabeled
     u_augs = []
     for uid in range(num_aug):
-        u_augs.append(x[(3+uid)*batch_size:(4+uid)*batch_size])
+        u_augs.append(x[(3 + uid) * batch_size : (4 + uid) * batch_size])
 
     # labeled + original unlabeled
-    x = torch.cat((x[:batch_size], x[3*batch_size:]))
+    x = torch.cat((x[:batch_size], x[3 * batch_size :]))
 
     # label guessing
     model.eval()
     u_guesses = []
     u_aug_enc_list = []
-    _, _, _, u_enc = model(u0, y,
-            task=taskname, get_enc=True)
+    _, _, _, u_enc = model(u0, y, task=taskname, get_enc=True)
 
     for x_u in u_augs:
         if alpha_aug <= 0:
@@ -96,11 +93,14 @@ def mixmatch(model, batch, num_aug=2, alpha=0.4, alpha_aug=0.4, u_lambda=0.5):
             u_aug_lam = np.random.beta(alpha_aug, alpha_aug)
 
         # it is fine to switch the order of x_u and u0 in this case
-        u_logits, y, _, u_aug_enc = model(x_u, y,
-                               augment_batch=(u0, u_aug_lam),
-                               aug_enc=u_enc,
-                               task=taskname,
-                               get_enc=True)
+        u_logits, y, _, u_aug_enc = model(
+            x_u,
+            y,
+            augment_batch=(u0, u_aug_lam),
+            aug_enc=u_enc,
+            task=taskname,
+            get_enc=True,
+        )
         # softmax
         u_guess = F.softmax(u_logits, dim=-1)
         u_guess = u_guess.detach()
@@ -114,7 +114,7 @@ def mixmatch(model, batch, num_aug=2, alpha=0.4, alpha_aug=0.4, u_lambda=0.5):
 
     # temperature sharpening
     T = 0.5
-    u_power = u_guess.pow(1/T)
+    u_power = u_guess.pow(1 / T)
     u_guess = u_power / u_power.sum(dim=-1, keepdim=True)
 
     # make duplicate of u_guess
@@ -138,9 +138,7 @@ def mixmatch(model, batch, num_aug=2, alpha=0.4, alpha_aug=0.4, u_lambda=0.5):
     y_mixed = y_concat[index, :]
 
     # x_aug_enc
-    _, _, _, x_enc = model(x[:batch_size], y,
-                           task=taskname,
-                           get_enc=True)
+    _, _, _, x_enc = model(x[:batch_size], y, task=taskname, get_enc=True)
     # concatenate the augmented encodings
     x_enc = torch.cat([x_enc] + u_aug_enc_list)
 
@@ -149,11 +147,14 @@ def mixmatch(model, batch, num_aug=2, alpha=0.4, alpha_aug=0.4, u_lambda=0.5):
         aug_lam = 1.0
     else:
         aug_lam = np.random.beta(alpha_aug, alpha_aug)
-    logits, y_concat, _ = model(x, y_concat,
-                            augment_batch=(aug_x, aug_lam),
-                            x_enc=x_enc,
-                            second_batch=(index, lam),
-                            task=taskname)
+    logits, y_concat, _ = model(
+        x,
+        y_concat,
+        augment_batch=(aug_x, aug_lam),
+        x_enc=x_enc,
+        second_batch=(index, lam),
+        task=taskname,
+    )
     logits = F.softmax(logits, dim=-1)
     l_pred = logits[:batch_size].view(-1, vocab)
     u_pred = logits[batch_size:].view(-1, vocab)
@@ -164,7 +165,7 @@ def mixmatch(model, batch, num_aug=2, alpha=0.4, alpha_aug=0.4, u_lambda=0.5):
     u_y = y[batch_size:].view(-1, vocab)
 
     # cross entropy on label data + mse on unlabeled data
-    if 'tagging' in taskname:
+    if "tagging" in taskname:
         loss_x = tagging_criterion(l_pred, l_y)
         loss_u = F.mse_loss(u_pred[:, 1:], u_y[:, 1:])
     else:
@@ -179,9 +180,8 @@ def mixmatch(model, batch, num_aug=2, alpha=0.4, alpha_aug=0.4, u_lambda=0.5):
 epoch_idx = 0
 u_order = []
 
-def create_mixmatch_batches(l_set, aug_set, u_set, u_set_aug,
-                            num_aug=2,
-                            batch_size=16):
+
+def create_mixmatch_batches(l_set, aug_set, u_set, u_set_aug, num_aug=2, batch_size=16):
     """Create batches for mixmatchnl
 
     Each batch is the concatenation of (1) a labeled batch, (2) an augmented
@@ -249,14 +249,21 @@ def create_mixmatch_batches(l_set, aug_set, u_set, u_set_aug,
     return mixed_batches
 
 
-def train(model, l_set, aug_set, u_set, u_set_aug, optimizer,
-          scheduler=None,
-          batch_size=32,
-          num_aug=2,
-          alpha=0.4,
-          alpha_aug=0.8,
-          u_lambda=1.0,
-          fp16=False):
+def train(
+    model,
+    l_set,
+    aug_set,
+    u_set,
+    u_set_aug,
+    optimizer,
+    scheduler=None,
+    batch_size=32,
+    num_aug=2,
+    alpha=0.4,
+    alpha_aug=0.8,
+    u_lambda=1.0,
+    fp16=False,
+):
     """Perform one epoch of MixMatchNL
 
     Args:
@@ -277,12 +284,9 @@ def train(model, l_set, aug_set, u_set, u_set_aug, optimizer,
     Returns:
         None
     """
-    mixed_batches = create_mixmatch_batches(l_set,
-                                            aug_set,
-                                            u_set,
-                                            u_set_aug,
-                                            num_aug=num_aug,
-                                            batch_size=batch_size // 2)
+    mixed_batches = create_mixmatch_batches(
+        l_set, aug_set, u_set, u_set_aug, num_aug=num_aug, batch_size=batch_size // 2
+    )
 
     model.train()
     for i, batch in enumerate(mixed_batches):
@@ -309,21 +313,26 @@ def train(model, l_set, aug_set, u_set, u_set_aug, optimizer,
             if i == 0:
                 print("=====sanity check======")
                 print("words:", words[0])
-                print("x:", x.cpu().numpy()[0][:seqlens[0]])
-                print("tokens:", get_tokenizer().convert_ids_to_tokens(x.cpu().numpy()[0])[:seqlens[0]])
+                print("x:", x.cpu().numpy()[0][: seqlens[0]])
+                print(
+                    "tokens:",
+                    get_tokenizer().convert_ids_to_tokens(x.cpu().numpy()[0])[
+                        : seqlens[0]
+                    ],
+                )
                 print("is_heads:", is_heads[0])
                 y_sample = _y.cpu().numpy()[0]
                 if np.isscalar(y_sample):
                     print("y:", y_sample)
                 else:
-                    print("y:", y_sample[:seqlens[0]])
+                    print("y:", y_sample[: seqlens[0]])
                 print("tags:", tags[0])
                 print("mask:", mask[0])
                 print("seqlen:", seqlens[0])
                 print("task_name:", taskname)
                 print("=======================")
 
-            if i%10 == 0: # monitoring
+            if i % 10 == 0:  # monitoring
                 print(f"step: {i}, task: {taskname}, loss: {loss.item()}")
                 del loss
         except:
@@ -331,15 +340,9 @@ def train(model, l_set, aug_set, u_set, u_set_aug, optimizer,
             torch.cuda.empty_cache()
 
 
-def initialize_and_train(task_config,
-                         trainset,
-                         augmentset,
-                         validset,
-                         testset,
-                         uset,
-                         uset_aug,
-                         hp,
-                         run_tag):
+def initialize_and_train(
+    task_config, trainset, augmentset, validset, testset, uset, uset_aug, hp, run_tag
+):
     """The train process.
 
     Args:
@@ -359,35 +362,40 @@ def initialize_and_train(task_config,
     padder = SnippextDataset.pad
 
     # iterators for dev/test set
-    valid_iter = data.DataLoader(dataset=validset,
-                                 batch_size=hp.batch_size * 4,
-                                 shuffle=False,
-                                 num_workers=0,
-                                 collate_fn=padder)
-    test_iter = data.DataLoader(dataset=testset,
-                                 batch_size=hp.batch_size * 4,
-                                 shuffle=False,
-                                 num_workers=0,
-                                 collate_fn=padder)
-
+    valid_iter = data.DataLoader(
+        dataset=validset,
+        batch_size=hp.batch_size * 4,
+        shuffle=False,
+        num_workers=0,
+        collate_fn=padder,
+    )
+    test_iter = data.DataLoader(
+        dataset=testset,
+        batch_size=hp.batch_size * 4,
+        shuffle=False,
+        num_workers=0,
+        collate_fn=padder,
+    )
 
     # initialize model
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    if device == 'cpu':
-        model = MultiTaskNet([task_config], device,
-                         hp.finetuning, bert_path=hp.bert_path)
-        optimizer = AdamW(model.parameters(), lr = hp.lr)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    if device == "cpu":
+        model = MultiTaskNet(
+            [task_config], device, hp.finetuning, bert_path=hp.bert_path
+        )
+        optimizer = AdamW(model.parameters(), lr=hp.lr)
     else:
-        model = MultiTaskNet([task_config], device,
-                         hp.finetuning, bert_path=hp.bert_path).cuda()
-        optimizer = AdamW(model.parameters(), lr = hp.lr)
-        model, optimizer = amp.initialize(model, optimizer, opt_level='O2')
+        model = MultiTaskNet(
+            [task_config], device, hp.finetuning, bert_path=hp.bert_path
+        ).cuda()
+        optimizer = AdamW(model.parameters(), lr=hp.lr)
+        model, optimizer = amp.initialize(model, optimizer, opt_level="O2")
 
     # learning rate scheduler
     num_steps = (len(trainset) // hp.batch_size * 2) * hp.n_epochs
-    scheduler = get_linear_schedule_with_warmup(optimizer,
-                                                num_warmup_steps=num_steps // 10,
-                                                num_training_steps=num_steps)
+    scheduler = get_linear_schedule_with_warmup(
+        optimizer, num_warmup_steps=num_steps // 10, num_training_steps=num_steps
+    )
 
     # create logging
     if not os.path.exists(hp.logdir):
@@ -396,39 +404,42 @@ def initialize_and_train(task_config,
 
     # start training
     best_dev_f1 = best_test_f1 = 0.0
-    for epoch in range(1, hp.n_epochs+1):
-        train(model,
-              trainset,
-              augmentset,
-              uset,
-              uset_aug,
-              optimizer,
-              scheduler=scheduler,
-              batch_size=hp.batch_size,
-              num_aug=hp.num_aug,
-              alpha=hp.alpha,
-              alpha_aug=hp.alpha_aug,
-              u_lambda=hp.u_lambda,
-              fp16=hp.fp16)
+    for epoch in range(1, hp.n_epochs + 1):
+        train(
+            model,
+            trainset,
+            augmentset,
+            uset,
+            uset_aug,
+            optimizer,
+            scheduler=scheduler,
+            batch_size=hp.batch_size,
+            num_aug=hp.num_aug,
+            alpha=hp.alpha,
+            alpha_aug=hp.alpha_aug,
+            u_lambda=hp.u_lambda,
+            fp16=hp.fp16,
+        )
 
         print(f"=========eval at epoch={epoch}=========")
-        dev_f1, test_f1 = eval_on_task(epoch,
-                            model,
-                            task_config['name'],
-                            valid_iter,
-                            validset,
-                            test_iter,
-                            testset,
-                            writer,
-                            run_tag)
+        dev_f1, test_f1 = eval_on_task(
+            epoch,
+            model,
+            task_config["name"],
+            valid_iter,
+            validset,
+            test_iter,
+            testset,
+            writer,
+            run_tag,
+        )
 
         if hp.save_model:
             if dev_f1 > best_dev_f1:
                 best_dev_f1 = dev_f1
-                torch.save(model.state_dict(), run_tag + '_dev.pt')
+                torch.save(model.state_dict(), run_tag + "_dev.pt")
             if test_f1 > best_test_f1:
                 best_test_f1 = test_f1
-                torch.save(model.state_dict(), run_tag + '_test.pt')
+                torch.save(model.state_dict(), run_tag + "_test.pt")
 
     writer.close()
-

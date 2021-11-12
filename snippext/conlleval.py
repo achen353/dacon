@@ -30,6 +30,7 @@ from __future__ import division, print_function, unicode_literals
 import sys
 from collections import defaultdict
 
+
 def split_tag(chunk_tag):
     """
     split chunk tag into IOBES prefix and chunk_type
@@ -37,9 +38,10 @@ def split_tag(chunk_tag):
     B-PER -> (B, PER)
     O -> (O, None)
     """
-    if chunk_tag == 'O':
-        return ('O', None)
-    return chunk_tag.split('-', maxsplit=1)
+    if chunk_tag == "O":
+        return ("O", None)
+    return chunk_tag.split("-", maxsplit=1)
+
 
 def is_chunk_end(prev_tag, tag):
     """
@@ -54,15 +56,16 @@ def is_chunk_end(prev_tag, tag):
     prefix1, chunk_type1 = split_tag(prev_tag)
     prefix2, chunk_type2 = split_tag(tag)
 
-    if prefix1 == 'O':
+    if prefix1 == "O":
         return False
-    if prefix2 == 'O':
-        return prefix1 != 'O'
+    if prefix2 == "O":
+        return prefix1 != "O"
 
     if chunk_type1 != chunk_type2:
         return True
 
-    return prefix2 in ['B', 'S'] or prefix1 in ['E', 'S']
+    return prefix2 in ["B", "S"] or prefix1 in ["E", "S"]
+
 
 def is_chunk_start(prev_tag, tag):
     """
@@ -71,15 +74,15 @@ def is_chunk_start(prev_tag, tag):
     prefix1, chunk_type1 = split_tag(prev_tag)
     prefix2, chunk_type2 = split_tag(tag)
 
-    if prefix2 == 'O':
+    if prefix2 == "O":
         return False
-    if prefix1 == 'O':
-        return prefix2 != 'O'
+    if prefix1 == "O":
+        return prefix2 != "O"
 
     if chunk_type1 != chunk_type2:
         return True
 
-    return prefix2 in ['B', 'S'] or prefix1 in ['E', 'S']
+    return prefix2 in ["B", "S"] or prefix1 in ["E", "S"]
 
 
 def calc_metrics(tp, p, t, percent=True):
@@ -118,7 +121,7 @@ def count_chunks(true_seqs, pred_seqs):
     true_counts = defaultdict(int)
     pred_counts = defaultdict(int)
 
-    prev_true_tag, prev_pred_tag = 'O', 'O'
+    prev_true_tag, prev_pred_tag = "O", "O"
     correct_chunk = None
 
     for true_tag, pred_tag in zip(true_seqs, pred_seqs):
@@ -154,11 +157,25 @@ def count_chunks(true_seqs, pred_seqs):
     if correct_chunk is not None:
         correct_chunks[correct_chunk] += 1
 
-    return (correct_chunks, true_chunks, pred_chunks,
-        correct_counts, true_counts, pred_counts)
+    return (
+        correct_chunks,
+        true_chunks,
+        pred_chunks,
+        correct_counts,
+        true_counts,
+        pred_counts,
+    )
 
-def get_result(correct_chunks, true_chunks, pred_chunks,
-    correct_counts, true_counts, pred_counts, verbose=True):
+
+def get_result(
+    correct_chunks,
+    true_chunks,
+    pred_chunks,
+    correct_counts,
+    true_counts,
+    pred_counts,
+    verbose=True,
+):
     """
     if verbose, print overall performance, as well as preformance per chunk type;
     otherwise, simply return overall prec, rec, f1 scores
@@ -171,8 +188,8 @@ def get_result(correct_chunks, true_chunks, pred_chunks,
     sum_correct_counts = sum(correct_counts.values())
     sum_true_counts = sum(true_counts.values())
 
-    nonO_correct_counts = sum(v for k, v in correct_counts.items() if k != 'O')
-    nonO_true_counts = sum(v for k, v in true_counts.items() if k != 'O')
+    nonO_correct_counts = sum(v for k, v in correct_counts.items() if k != "O")
+    nonO_true_counts = sum(v for k, v in true_counts.items() if k != "O")
 
     chunk_types = sorted(list(set(list(true_chunks) + list(pred_chunks))))
 
@@ -184,19 +201,26 @@ def get_result(correct_chunks, true_chunks, pred_chunks,
 
     # print overall performance, and performance per chunk type
 
-    print("processed %i tokens with %i phrases; " % (sum_true_counts, sum_true_chunks), end='')
-    print("found: %i phrases; correct: %i.\n" % (sum_pred_chunks, sum_correct_chunks), end='')
+    print(
+        "processed %i tokens with %i phrases; " % (sum_true_counts, sum_true_chunks),
+        end="",
+    )
+    print(
+        "found: %i phrases; correct: %i.\n" % (sum_pred_chunks, sum_correct_chunks),
+        end="",
+    )
 
-    print("accuracy: %6.2f%%; (non-O)" % (100*nonO_correct_counts/nonO_true_counts))
-    print("accuracy: %6.2f%%; " % (100*sum_correct_counts/sum_true_counts), end='')
+    print("accuracy: %6.2f%%; (non-O)" % (100 * nonO_correct_counts / nonO_true_counts))
+    print("accuracy: %6.2f%%; " % (100 * sum_correct_counts / sum_true_counts), end="")
     print("precision: %6.2f%%; recall: %6.2f%%; FB1: %6.2f" % (prec, rec, f1))
 
     # for each chunk type, compute precision, recall and FB1 (default values are 0.0)
     for t in chunk_types:
         prec, rec, f1 = calc_metrics(correct_chunks[t], pred_chunks[t], true_chunks[t])
-        print("%17s: " %t , end='')
-        print("precision: %6.2f%%; recall: %6.2f%%; FB1: %6.2f" %
-                    (prec, rec, f1), end='')
+        print("%17s: " % t, end="")
+        print(
+            "precision: %6.2f%%; recall: %6.2f%%; FB1: %6.2f" % (prec, rec, f1), end=""
+        )
         print("  %d" % pred_chunks[t])
 
     return res
@@ -204,12 +228,27 @@ def get_result(correct_chunks, true_chunks, pred_chunks,
     # http://cnts.uia.ac.be/conll2003/ner/example.tex
     # but I'm not implementing this
 
+
 def evaluate(true_seqs, pred_seqs, verbose=True):
-    (correct_chunks, true_chunks, pred_chunks,
-        correct_counts, true_counts, pred_counts) = count_chunks(true_seqs, pred_seqs)
-    result = get_result(correct_chunks, true_chunks, pred_chunks,
-        correct_counts, true_counts, pred_counts, verbose=verbose)
+    (
+        correct_chunks,
+        true_chunks,
+        pred_chunks,
+        correct_counts,
+        true_counts,
+        pred_counts,
+    ) = count_chunks(true_seqs, pred_seqs)
+    result = get_result(
+        correct_chunks,
+        true_chunks,
+        pred_chunks,
+        correct_counts,
+        true_counts,
+        pred_counts,
+        verbose=verbose,
+    )
     return result
+
 
 def evaluate_conll_file(fileIterator):
     true_seqs, pred_seqs = [], []
@@ -218,8 +257,8 @@ def evaluate_conll_file(fileIterator):
         cols = line.strip().split()
         # each non-empty line must contain >= 3 columns
         if not cols:
-            true_seqs.append('O')
-            pred_seqs.append('O')
+            true_seqs.append("O")
+            pred_seqs.append("O")
         elif len(cols) < 3:
             raise IOError("conlleval: too few columns in line %s\n" % line)
         else:
@@ -228,7 +267,8 @@ def evaluate_conll_file(fileIterator):
             pred_seqs.append(cols[-1])
     return evaluate(true_seqs, pred_seqs)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     """
     usage:     conlleval < file
     """
