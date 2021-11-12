@@ -4,12 +4,12 @@ import random
 import numpy as np
 import torch
 import torch.nn.functional as F
+from apex import amp
 from tensorboardX import SummaryWriter
 from torch.utils import data
 from tqdm import tqdm
 from transformers import AdamW, get_linear_schedule_with_warmup
 
-from apex import amp
 from snippext.dataset import *
 from snippext.train_util import *
 

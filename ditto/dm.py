@@ -10,16 +10,12 @@ import torch.nn as nn
 
 sys.path.insert(0, "Snippext_public")
 
+from apex import amp
 from tensorboardX import SummaryWriter
 from torch.utils import data
-from transformers import (
-    AdamW,
-    DistilBertModel,
-    RobertaModel,
-    get_linear_schedule_with_warmup,
-)
+from transformers import (AdamW, DistilBertModel, RobertaModel,
+                          get_linear_schedule_with_warmup)
 
-from apex import amp
 from snippext.dataset import SnippextDataset, get_tokenizer
 
 
