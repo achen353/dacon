@@ -1,19 +1,25 @@
-# DACon
-Code for CS 8803 DMM Project: Data Augmentation for Entity Matching using Consistency Learning
+# Rotom
+Code for the paper "Rotom: A Meta-Learned Data Augmentation Framework for Entity Matching, Data Cleaning, Text Classification, and Beyond"
 
 ## Requirements
 
-* Python 3.7+
-* PyTorch 1.10.0+cu111: default CUDA version 11.1 (change the `--find-links` in `requirements.txt` for other versions)
-* Transformers 4.12.3
-* NVIDIA Apex (fp16 training): requires Nvidia graphic card
+* Python 3.7.7
+* PyTorch 1.4.0
+* Transformers 3.1.0
+* NLTK (stopwords, wordnet)
+* NVIDIA Apex (fp16 training)
 
 Install required packages
 ```
 pip install -r requirements.txt
-# Apex requires CUDA-supported graphic cards (Nvidia graphic cards)
 git clone https://github.com/NVIDIA/apex.git
 pip install -v --disable-pip-version-check --no-cache-dir ./apex
+```
+
+Install [Snippext](https://github.com/rit-git/Snippext_public):
+```
+git clone -b v1.0 https://github.com/rit-git/Snippext_public.git
+cp -r Snippext_public/snippext .
 ```
 
 ## Model Training
