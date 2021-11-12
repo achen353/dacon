@@ -4,11 +4,10 @@ import random
 import numpy as np
 import torch
 import torch.nn as nn
+from apex import amp
 from tensorboardX import SummaryWriter
 from torch.utils import data
 from transformers import AdamW, get_linear_schedule_with_warmup
-
-from apex import amp
 
 from .dataset import *
 from .model import MultiTaskNet
