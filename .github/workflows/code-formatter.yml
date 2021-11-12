@@ -20,16 +20,17 @@ jobs:
       - uses: actions/checkout@v2
     
       # Runs autoflake
-      - name: Autoflake
+      - name: autoflake
         run:
-          pip install autoflake &&
-          autoflake -r --in-place --remove-all-unused-imports .
+          pip install autoflake && autoflake -r --in-place --remove-all-unused-imports .
       
       # Runs black
-      - name: Black Code Formatter
-        uses: lgeiger/black-action@v1.0.1
+      - name: black
+        run: 
+          pip install black && black .
 
       # Runs isort
-      - name: python-isort
-        uses: isort/isort-action@v0.1.0
+      - name: isort
+        run:
+          pip install isort && isort .
         
