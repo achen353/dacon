@@ -4,7 +4,7 @@ from functools import partial
 
 import numpy as np
 import torch
-import os
+
 from ditto.dataset import DittoDataset
 from rotom.dataset import TextCLSDataset
 
