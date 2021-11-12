@@ -22,7 +22,7 @@ jobs:
       # Runs autoflake
       - name: Autoflake
         run:
-          pip install autoflake
+          pip install autoflake &&
           autoflake -r --in-place --remove-all-unused-imports .
       
       # Runs black
