@@ -1,7 +1,12 @@
 import torch
 import torch.nn as nn
-from transformers import (AlbertModel, BertModel, DistilBertModel,
-                          RobertaModel, XLNetModel)
+from transformers import (
+    AlbertModel,
+    BertModel,
+    DistilBertModel,
+    RobertaModel,
+    XLNetModel,
+)
 
 model_ckpts = {
     "bert": "bert-base-uncased",

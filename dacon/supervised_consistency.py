@@ -54,16 +54,6 @@ def train(model, train_set, optimizer, scheduler=None, batch_size=32, fp16=False
             orig_seqlens,
             orig_taskname,
         ) = orig_batch
-        (
-            aug_words,
-            aug_x,
-            aug_is_heads,
-            tags,
-            aug_mask,
-            y,
-            aug_seqlens,
-            aug_taskname,
-        ) = aug_batch
 
         taskname = orig_taskname[0]
         _y = y
@@ -77,26 +67,38 @@ def train(model, train_set, optimizer, scheduler=None, batch_size=32, fp16=False
 
         # forward
         optimizer.zero_grad()
-        orig_logits, orig_y, _ = model(x, y, task=taskname)
-        aug_logits, aug_y, _ = model(aug_x, y, task=taskname)
 
+        orig_logits, orig_y, _ = model(x, y, task=taskname)
         orig_logits = (
             orig_logits.view(-1)
             if "sts-b" in taskname
             else orig_logits.view(-1, orig_logits.shape[-1])
         )
-        aug_logits = (
-            aug_logits.view(-1)
-            if "sts-b" in taskname
-            else aug_logits.view(-1, aug_logits.shape[-1])
-        )
-
         orig_y = orig_y.view(-1)
-        aug_y = aug_y.view(-1)
-
         orig_ce_loss = criterion(orig_logits, orig_y)
-        aug_ce_loss = criterion(aug_logits, aug_y)
-        loss = orig_ce_loss + aug_ce_loss
+
+        loss = orig_ce_loss
+
+        for aug_sample in aug_batch:
+            (
+                aug_words,
+                aug_x,
+                aug_is_heads,
+                tags,
+                aug_mask,
+                y,
+                aug_seqlens,
+                aug_taskname,
+            ) = aug_sample
+            aug_logits, aug_y, _ = model(aug_x, y, task=taskname)
+            aug_logits = (
+                aug_logits.view(-1)
+                if "sts-b" in taskname
+                else aug_logits.view(-1, aug_logits.shape[-1])
+            )
+            aug_y = aug_y.view(-1)
+            aug_ce_loss = criterion(aug_logits, aug_y)
+            loss += aug_ce_loss
 
         # back propagation
         if fp16:
@@ -194,7 +196,6 @@ def initialize_and_train(
         lm=hp.lm,
         max_len=hp.max_len,
         size=hp.size,
-        augmenter=Augmenter(aug_distribution=model.aug_distribution),
     )
 
     # create iterators for validation and test data

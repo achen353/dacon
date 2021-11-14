@@ -6,7 +6,6 @@ import numpy as np
 import torch
 from nltk.corpus import wordnet
 from nltk.tokenize import word_tokenize
-from torch.nn.functional import gumbel_softmax
 
 
 class Augmenter(object):
@@ -15,14 +14,8 @@ class Augmenter(object):
     Support both span and attribute level augmentation operators.
     """
 
-    def __init__(self, idf_fn="data/wikitext-idf.dat", aug_distribution=None):
+    def __init__(self, idf_fn="data/wikitext-idf.dat"):
         self.idf_dict = pickle.load(open(idf_fn, "rb")) if idf_fn else None
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.aug_distribution = (
-            aug_distribution
-            if aug_distribution is not None
-            else torch.zeros(7, device=device)
-        )
 
     def augment(self, tokens, labels, op="del", args=[]):
         """Performs data augmentation on a sequence of tokens
@@ -137,9 +130,11 @@ class Augmenter(object):
             "insert",
         ]
         if not op:
-            op_idx = torch.argmax(gumbel_softmax(self.aug_distribution, tau=0.1))
-            tokens, labels = self.augment(ops[op_idx], labels)
-        elif op == "all":
+            tokens_list = [self.augment(op, labels)[0] for op in ops]
+            results_list = [" ".join(tokens) for tokens in tokens_list]
+            return results_list
+
+        if op == "all":
             # RandAugment: https://arxiv.org/pdf/1909.13719.pdf
             N = 3
             for op in random.choices(ops, k=N):
