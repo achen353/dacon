@@ -168,7 +168,7 @@ class DittoDataset(SnippextDataset):
         is_heads, mask, seqlen = [1] * len(x), [1] * len(x), len(x)
 
         assert (
-                len(x) == len(mask) == len(is_heads)
+            len(x) == len(mask) == len(is_heads)
         ), f"len(x) = {len(x)}, len(y) = {len(y)}, len(is_heads) = {len(is_heads)}"
 
         return words, x, is_heads, tags, mask, y, seqlen, self.taskname

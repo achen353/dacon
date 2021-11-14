@@ -265,6 +265,7 @@ if __name__ == "__main__":
         )
     elif "supervised_consistency" in hp.da:
         from dacon.supervised_consistency import initialize_and_train
+
         initialize_and_train(
             task_config=config,
             train_raw_set=train_set,

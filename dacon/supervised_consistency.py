@@ -3,13 +3,13 @@ import os
 import numpy as np
 import torch
 import torch.nn as nn
+from apex import amp
 from augment import Augmenter
 from model import MultiTaskNet
 from tensorboardX import SummaryWriter
 from torch.utils import data
 from transformers import AdamW, get_linear_schedule_with_warmup
 
-from apex import amp
 from snippext.dataset import SnippextDataset, get_tokenizer
 from snippext.train_util import *
 
