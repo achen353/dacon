@@ -3,7 +3,6 @@ import pickle
 import random
 
 import numpy as np
-import torch
 from nltk.corpus import wordnet
 from nltk.tokenize import word_tokenize
 

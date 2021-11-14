@@ -4,7 +4,6 @@ from transformers import InputExample
 
 from dacon.augment import Augmenter
 from ditto.dataset import DittoDataset
-from rotom.dataset import TextCLSDataset
 from snippext.dataset import SnippextDataset, get_tokenizer
 
 
@@ -202,8 +201,6 @@ class DaconDataset(DittoDataset):
         )
         y = g_orig(5, orig_maxlen, 0) if "_tagging" in name[0] else f_orig(5)
 
-
-
         aug_seqlens_list = f_aug(6)
         aug_maxlen_list = [
             np.array(aug_seqlens).max() for aug_seqlens in aug_seqlens_list
@@ -233,7 +230,18 @@ class DaconDataset(DittoDataset):
         aug_x_list = [t(aug_x) for aug_x in aug_x_list]
         aug_mask_list = [t(aug_mask) for aug_mask in aug_mask_list]
 
-        aug_x_results = list(zip(aug_words_list, aug_x_list, aug_is_heads_list, aug_tags, aug_mask_list, aug_y_list, aug_seqlens_list, aug_name))
+        aug_x_results = list(
+            zip(
+                aug_words_list,
+                aug_x_list,
+                aug_is_heads_list,
+                aug_tags,
+                aug_mask_list,
+                aug_y_list,
+                aug_seqlens_list,
+                aug_name,
+            )
+        )
 
         return (
             orig_words,
