@@ -9,6 +9,7 @@ from torch.utils import data
 from transformers import AdamW, get_linear_schedule_with_warmup
 
 from dacon.augment import Augmenter
+from dacon.dataset import DaconDataset
 from dacon.model import MultiTaskNet
 from snippext.dataset import SnippextDataset, get_tokenizer
 from snippext.train_util import *
@@ -32,7 +33,7 @@ def train(model, train_set, optimizer, scheduler=None, batch_size=32, fp16=False
         batch_size=batch_size,
         shuffle=True,
         num_workers=1,
-        collate_fn=SnippextDataset.pad,
+        collate_fn=DaconDataset.pad,
     )
 
     tagging_criterion = nn.CrossEntropyLoss(ignore_index=0)
@@ -185,7 +186,7 @@ def initialize_and_train(
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model = MultiTaskNet([task_config], device, lm=hp.lm, bert_path=hp.bert_path)
 
-    # Create DaconDataset or DaconTextCLSDataset for train data
+    # create DaconDataset or DaconTextCLSDataset for train data
     train_set = train_dataset_class(
         source=train_raw_set,
         vocab=vocab,
@@ -196,15 +197,13 @@ def initialize_and_train(
         augmenter=Augmenter(aug_distribution=model.aug_distribution),
     )
 
-    # create iterators for validation and test
-    padder = SnippextDataset.pad
-
+    # create iterators for validation and test data
     valid_iter = data.DataLoader(
         dataset=valid_set,
         batch_size=hp.batch_size * 4,
         shuffle=False,
         num_workers=0,
-        collate_fn=padder,
+        collate_fn=SnippextDataset.pad,
     )
 
     test_iter = data.DataLoader(
@@ -212,7 +211,7 @@ def initialize_and_train(
         batch_size=hp.batch_size * 4,
         shuffle=False,
         num_workers=0,
-        collate_fn=padder,
+        collate_fn=SnippextDataset.pad,
     )
 
     if device == "cpu":

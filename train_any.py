@@ -73,7 +73,7 @@ def get_cls_config(hp):
         config["unlabeled"] = config["train_set"]
         config["valid_set"] = config["train_set"]
 
-        if hp.da in ["supervised_consistency"]:
+        if hp.da == "supervised_consistency":
             return config, DaconDataset, DittoDataset
 
         return config, DittoDataset, DittoDataset
@@ -98,7 +98,7 @@ def get_cls_config(hp):
             "vocab": vocab,
         }
 
-        if hp.da in ["supervised_consistency"]:
+        if hp.da == "supervised_consistency":
             return config, DaconDataset, DittoDataset
 
         return config, DittoDataset, DittoDataset
@@ -119,7 +119,7 @@ def get_cls_config(hp):
             "vocab": vocab,
         }
 
-        if hp.da in ["supervised_consistency"]:
+        if hp.da == "supervised_consistency":
             return config, DaconTextCLSDataset, TextCLSDataset
 
         return config, TextCLSDataset, TextCLSDataset
@@ -149,8 +149,8 @@ def get_cls_config(hp):
             "vocab": vocab,
         }
 
-        if hp.da in ["supervised_consistency"]:
-            return config, DaconDataset, DaconDataset
+        if hp.da == "supervised_consistency":
+            return config, DaconDataset, DittoDataset
 
         return config, TextCLSDataset, TextCLSDataset
 
@@ -207,7 +207,10 @@ if __name__ == "__main__":
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
 
-    if "supervised_consistency" in hp.da:
+    if "supervised_consistency" in hp.da and hp.da != "supervised_consistency":
+        raise argparse.ArgumentError("``supervised_consistency'' cannot be specified along with other DA operators.")
+
+    if hp.da == "supervised_consistency":
         torch.multiprocessing.set_start_method("spawn")
 
     # create the tag of the run
@@ -272,8 +275,8 @@ if __name__ == "__main__":
         initialize_and_train(
             task_config=config,
             train_raw_set=train_set,
-            valid_set=valid_set,
-            test_set=test_set,
+            valid_set=valid_dataset,
+            test_set=test_dataset,
             train_dataset_class=Dataset,
             vocab=vocab,
             hp=hp,
