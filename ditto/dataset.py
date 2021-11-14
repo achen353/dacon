@@ -103,7 +103,7 @@ class DittoDataset(SnippextDataset):
 
         Args:
             idx (int): the element index
-        Returns (TODO):
+        Returns:
             words, x, is_heads, tags, mask, y, seqlen, self.taskname
         """
         if self.balance:
@@ -124,7 +124,7 @@ class DittoDataset(SnippextDataset):
         if self.augment_op in ["t5", "invda"]:
             if len(self.augmented_examples[idx]) > 0:
                 words, _ = random.choice(self.augmented_examples[idx])
-        elif self.augmenter != None:
+        elif self.augmenter:
             words = self.augmenter.augment_sent(words, self.augment_op)
 
         if " [SEP] " in words:
@@ -165,13 +165,10 @@ class DittoDataset(SnippextDataset):
                 )
 
         y = self.tag2idx[tags]  # label
-        is_heads = [1] * len(x)
-        mask = [1] * len(x)
+        is_heads, mask, seqlen = [1] * len(x), [1] * len(x), len(x)
 
         assert (
-            len(x) == len(mask) == len(is_heads)
-        ), f"len(x)={len(x)}, len(y)={len(y)}, len(is_heads)={len(is_heads)}"
-        # seqlen
-        seqlen = len(mask)
+                len(x) == len(mask) == len(is_heads)
+        ), f"len(x) = {len(x)}, len(y) = {len(y)}, len(is_heads) = {len(is_heads)}"
 
         return words, x, is_heads, tags, mask, y, seqlen, self.taskname

@@ -74,7 +74,7 @@ def get_cls_config(hp):
         config["valid_set"] = config["train_set"]
 
         if hp.da in ["supervised_consistency"]:
-            return config, DaconDataset, DaconDataset
+            return config, DaconDataset, DittoDataset
 
         return config, DittoDataset, DittoDataset
     elif "cleaning_" in taskname:
@@ -99,7 +99,7 @@ def get_cls_config(hp):
         }
 
         if hp.da in ["supervised_consistency"]:
-            return config, DaconDataset, DaconDataset
+            return config, DaconDataset, DittoDataset
 
         return config, DittoDataset, DittoDataset
     elif "compare" in taskname:
@@ -120,7 +120,7 @@ def get_cls_config(hp):
         }
 
         if hp.da in ["supervised_consistency"]:
-            return config, DaconTextCLSDataset, DaconTextCLSDataset
+            return config, DaconTextCLSDataset, TextCLSDataset
 
         return config, TextCLSDataset, TextCLSDataset
     else:
@@ -262,6 +262,18 @@ if __name__ == "__main__":
 
         initialize_and_train(
             config, train_dataset, valid_dataset, test_dataset, hp, run_tag
+        )
+    elif "supervised_consistency" in hp.da:
+        from dacon.supervised_consistency import initialize_and_train
+        initialize_and_train(
+            task_config=config,
+            train_raw_set=train_set,
+            valid_set=valid_set,
+            test_set=test_set,
+            train_dataset_class=Dataset,
+            vocab=vocab,
+            hp=hp,
+            run_tag=run_tag,
         )
     elif "auto_ssl" in hp.da or "auto_filter_weight" in hp.da:
         if "em_" in task or "compare" in task:

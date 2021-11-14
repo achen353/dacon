@@ -72,8 +72,8 @@ class MultiTaskNet(nn.Module):
         self.num_classes = vocab_size
         self.module_dict["%s_dropout" % name] = nn.Dropout(hidden_dropout_prob)
         self.module_dict["%s_fc" % name] = nn.Linear(hidden_size, vocab_size)
-        # TODO: change the hard-coded "8" to number of augmentation op's
-        self.aug_distribution = nn.Parameter(torch.FloatTensor(8).to(self.device))
+        # TODO: change the hard-coded "7" to number of augmentation op's
+        self.aug_distribution = nn.Parameter(torch.FloatTensor(7).to(self.device))
 
     def forward(
         self,
