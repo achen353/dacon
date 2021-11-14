@@ -4,12 +4,12 @@ import numpy as np
 import torch
 import torch.nn as nn
 from apex import amp
-from dacon.augment import Augmenter
-from dacon.model import MultiTaskNet
 from tensorboardX import SummaryWriter
 from torch.utils import data
 from transformers import AdamW, get_linear_schedule_with_warmup
 
+from dacon.augment import Augmenter
+from dacon.model import MultiTaskNet
 from snippext.dataset import SnippextDataset, get_tokenizer
 from snippext.train_util import *
 
@@ -183,9 +183,7 @@ def initialize_and_train(
     """
     # initialize model
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = MultiTaskNet(
-        [task_config], device, lm=hp.lm, bert_path=hp.bert_path
-    )
+    model = MultiTaskNet([task_config], device, lm=hp.lm, bert_path=hp.bert_path)
 
     # Create DaconDataset or DaconTextCLSDataset for train data
     train_set = train_dataset_class(
