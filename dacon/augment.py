@@ -3,8 +3,10 @@ import pickle
 import random
 
 import numpy as np
+import torch
 from nltk.corpus import wordnet
 from nltk.tokenize import word_tokenize
+from torch.nn.functional import gumbel_softmax
 
 
 class Augmenter(object):
@@ -13,11 +15,13 @@ class Augmenter(object):
     Support both span and attribute level augmentation operators.
     """
 
-    def __init__(self, idf_fn="data/wikitext-idf.dat"):
-        if idf_fn is not None:
-            self.idf_dict = pickle.load(open(idf_fn, "rb"))
-        else:
-            self.idf_dict = None
+    def __init__(self, idf_fn="data/wikitext-idf.dat", aug_distribution=None):
+        self.idf_dict = pickle.load(open(idf_fn, "rb")) if idf_fn else None
+        self.aug_distribution = (
+            aug_distribution
+            if aug_distribution
+            else torch.zeros(7, device=torch.device)
+        )
 
     def augment(self, tokens, labels, op="del", args=[]):
         """Performs data augmentation on a sequence of tokens
@@ -94,7 +98,7 @@ class Augmenter(object):
 
         return tokens, labels
 
-    def augment_sent(self, text, op="all", args=[]):
+    def augment_sent(self, text, op=None, args=[]):
         """Performs data augmentation on a classification example.
 
         Similar to augment(tokens, labels) but works for sentences
@@ -122,18 +126,21 @@ class Augmenter(object):
                 labels.append("<SEP>")
             else:
                 labels.append("O")
-
-        if op == "all":
+        ops = [
+            "del",
+            "token_del_tfidf",
+            "token_del",
+            "shuffle",
+            "token_repl",
+            "token_repl_tfidf",
+            "insert",
+        ]
+        if not op:
+            op_idx = np.argmax(gumbel_softmax(self.aug_distribution, tau=0.1))
+            tokens, labels = self.augment(ops[op_idx])
+        elif op == "all":
             # RandAugment: https://arxiv.org/pdf/1909.13719.pdf
             N = 3
-            ops = [
-                "del",
-                "token_del_tfidf",
-                "token_del",
-                "shuffle",
-                "token_repl",
-                "token_repl_tfidf",
-            ]
             for op in random.choices(ops, k=N):
                 tokens, labels = self.augment(tokens, labels, op=op)
         else:

@@ -3,13 +3,14 @@ import os
 import numpy as np
 import torch
 import torch.nn as nn
-from apex import amp
+from augment import Augmenter
+from model import MultiTaskNet
 from tensorboardX import SummaryWriter
 from torch.utils import data
 from transformers import AdamW, get_linear_schedule_with_warmup
 
-from ditto.dataset import *
-from snippext.model import MultiTaskNet
+from apex import amp
+from snippext.dataset import SnippextDataset, get_tokenizer
 from snippext.train_util import *
 
 
@@ -41,8 +42,29 @@ def train(model, train_set, optimizer, scheduler=None, batch_size=32, fp16=False
     model.train()
     for i, batch in enumerate(iterator):
         # for monitoring
-        words, x, is_heads, tags, mask, y, seqlens, taskname = batch
-        taskname = taskname[0]
+        orig_batch, aug_batch = batch
+        (
+            orig_words,
+            x,
+            orig_is_heads,
+            tags,
+            orig_mask,
+            y,
+            orig_seqlens,
+            orig_taskname,
+        ) = orig_batch
+        (
+            aug_words,
+            aug_x,
+            aug_is_heads,
+            tags,
+            aug_mask,
+            y,
+            aug_seqlens,
+            aug_taskname,
+        ) = aug_batch
+
+        taskname = orig_taskname[0]
         _y = y
 
         if "tagging" in taskname:
@@ -54,13 +76,26 @@ def train(model, train_set, optimizer, scheduler=None, batch_size=32, fp16=False
 
         # forward
         optimizer.zero_grad()
-        logits, y, _ = model(x, y, task=taskname)
-        if "sts-b" in taskname:
-            logits = logits.view(-1)
-        else:
-            logits = logits.view(-1, logits.shape[-1])
-        y = y.view(-1)
-        loss = criterion(logits, y)
+        orig_logits, orig_y, _ = model(x, y, task=taskname)
+        aug_logits, aug_y, _ = model(aug_x, y, task=taskname)
+
+        orig_logits = (
+            orig_logits.view(-1)
+            if "sts-b" in taskname
+            else orig_logits.view(-1, orig_logits.shape[-1])
+        )
+        aug_logits = (
+            aug_logits.view(-1)
+            if "sts-b" in taskname
+            else aug_logits.view(-1, aug_logits.shape[-1])
+        )
+
+        orig_y = orig_y.view(-1)
+        aug_y = aug_y.view(-1)
+
+        orig_ce_loss = criterion(orig_logits, orig_y)
+        aug_ce_loss = criterion(aug_logits, aug_y)
+        loss = orig_ce_loss + aug_ce_loss
 
         # back propagation
         if fp16:
@@ -74,22 +109,46 @@ def train(model, train_set, optimizer, scheduler=None, batch_size=32, fp16=False
 
         if i == 0:
             print("=====sanity check======")
-            print("words:", words[0])
-            print("x:", x.cpu().numpy()[0][: seqlens[0]])
+            print("-----original data-----")
+            print("orig_words: ", orig_words[0])
+            print("x:", x.cpu().numpy()[0][: orig_seqlens[0]])
             print(
-                "tokens:",
-                get_tokenizer().convert_ids_to_tokens(x.cpu().numpy()[0])[: seqlens[0]],
+                "orig_tokens: ",
+                get_tokenizer().convert_ids_to_tokens(x.cpu().numpy()[0])[
+                    : orig_seqlens[0]
+                ],
             )
-            print("is_heads:", is_heads[0])
+            print("orig_is_heads: ", orig_is_heads[0])
             y_sample = _y.cpu().numpy()[0]
             if np.isscalar(y_sample):
-                print("y:", y_sample)
+                print("y :", y_sample)
             else:
-                print("y:", y_sample[: seqlens[0]])
-            print("tags:", tags[0])
-            print("mask:", mask[0])
-            print("seqlen:", seqlens[0])
-            print("task_name:", taskname)
+                print("y: ", y_sample[: aug_seqlens[0]])
+            print("tags: ", tags[0])
+            print("orig_mask: ", orig_mask[0])
+            print("orig_seqlen: ", orig_seqlens[0])
+            print("task_name: ", taskname)
+            print("-----augmented data----")
+            print("aug_words: ", aug_words[0])
+            print("aug_x: ", x.cpu().numpy()[0][: aug_seqlens[0]])
+            print(
+                "aug_tokens: ",
+                get_tokenizer().convert_ids_to_tokens(x.cpu().numpy()[0])[
+                    : aug_seqlens[0]
+                ],
+            )
+            print("aug_is_heads: ", aug_is_heads[0])
+            y_sample = _y.cpu().numpy()[0]
+            if np.isscalar(y_sample):
+                print("y: ", y_sample)
+            else:
+                print("y: ", y_sample[: aug_seqlens[0]])
+            print("tags: ", tags[0])
+            print("aug_mask: ", aug_mask[0])
+            print("aug_seqlen: ", aug_seqlens[0])
+            print("task_name: ", taskname)
+            print("----aug_distribution---")
+            print("aug_distribution: ", model.aug_distribution)
             print("=======================")
 
         if i % 10 == 0:  # monitoring
@@ -97,42 +156,67 @@ def train(model, train_set, optimizer, scheduler=None, batch_size=32, fp16=False
             del loss
 
 
-def initialize_and_train(task_config, trainset, validset, testset, hp, run_tag):
+def initialize_and_train(
+    task_config,
+    train_raw_set,
+    valid_set,
+    test_set,
+    train_dataset_class,
+    vocab,
+    hp,
+    run_tag,
+):
     """The train process.
 
     Args:
         task_config (dictionary): the configuration of the task
-        trainset (SnippextDataset): the training set
-        validset (SnippextDataset): the validation set
-        testset (SnippextDataset): the testset
-        hp (Namespace): the parsed hyperparameters
+        train_raw_set (str): path to the training set
+        valid_set (DittoDataset or TextCLSDataset): the validation set
+        test_set (DittoDataset or TextCLSDataset): the test set
+        train_dataset_class (DaconDataset or DaconTextCLSDataset): the dataset class for training data
+        vocab: the vocab for the model
+        hp (Namespace): the parsed hyper-parameters
         run_tag (string): the tag of the run (for logging purpose)
 
     Returns:
         None
     """
+    # initialize model
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model = MultiTaskNet(
+        [task_config], device, hp.finetuning, lm=hp.lm, bert_path=hp.bert_path
+    )
+
+    # Create DaconDataset or DaconTextCLSDataset for train data
+    train_set = train_dataset_class(
+        source=train_raw_set,
+        vocab=vocab,
+        taskname=task_config["name"],
+        lm=hp.lm,
+        max_len=hp.max_len,
+        size=hp.size,
+        augmenter=Augmenter(aug_distribution=model.aug_distribution),
+    )
+
     # create iterators for validation and test
     padder = SnippextDataset.pad
+
     valid_iter = data.DataLoader(
-        dataset=validset,
-        batch_size=hp.batch_size * 4,
-        shuffle=False,
-        num_workers=0,
-        collate_fn=padder,
-    )
-    test_iter = data.DataLoader(
-        dataset=testset,
+        dataset=valid_set,
         batch_size=hp.batch_size * 4,
         shuffle=False,
         num_workers=0,
         collate_fn=padder,
     )
 
-    # initialize model
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = MultiTaskNet(
-        [task_config], device, hp.finetuning, lm=hp.lm, bert_path=hp.bert_path
+    test_iter = data.DataLoader(
+        dataset=test_set,
+        batch_size=hp.batch_size * 4,
+        shuffle=False,
+        num_workers=0,
+        collate_fn=padder,
     )
+
     if device == "cpu":
         optimizer = AdamW(model.parameters(), lr=hp.lr)
     else:
@@ -142,7 +226,7 @@ def initialize_and_train(task_config, trainset, validset, testset, hp, run_tag):
             model, optimizer = amp.initialize(model, optimizer, opt_level="O2")
 
     # learning rate scheduler
-    num_steps = (len(trainset) // hp.batch_size) * hp.n_epochs
+    num_steps = (len(train_set) // hp.batch_size) * hp.n_epochs
     scheduler = get_linear_schedule_with_warmup(
         optimizer, num_warmup_steps=num_steps // 10, num_training_steps=num_steps
     )
@@ -158,7 +242,7 @@ def initialize_and_train(task_config, trainset, validset, testset, hp, run_tag):
     while epoch <= hp.n_epochs:
         train(
             model,
-            trainset,
+            train_set,
             optimizer,
             scheduler=scheduler,
             batch_size=hp.batch_size,
@@ -171,9 +255,9 @@ def initialize_and_train(task_config, trainset, validset, testset, hp, run_tag):
             model,
             task_config["name"],
             valid_iter,
-            validset,
+            valid_set,
             test_iter,
-            testset,
+            test_set,
             writer,
             run_tag,
         )
