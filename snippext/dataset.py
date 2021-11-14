@@ -227,7 +227,7 @@ class SnippextDataset(data.Dataset):
 
         Args:
             idx (int): the element index
-        Returns (TODO):
+        Returns:
             words, x, is_heads, tags, mask, y, seqlen, self.taskname
         """
         words, tags = self.sents[idx], self.tags_li[idx]

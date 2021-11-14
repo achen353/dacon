@@ -1,3 +1,5 @@
+import numpy as np
+import torch
 from transformers import InputExample
 
 from dacon.augment import Augmenter
@@ -147,6 +149,65 @@ class DaconDataset(DittoDataset):
             aug_seqlen,
             self.taskname,
         )
+
+    @staticmethod
+    def pad(batch):
+        """Pads to the longest sample
+
+        Args:
+            batch:
+
+        Returns (TODO):
+            return words, f(x), is_heads, tags, f(mask), f(y), seqlens, name
+        """
+        f_orig = lambda x: [sample[0][x] for sample in batch]
+        f_aug = lambda x: [sample[1][x] for sample in batch]
+
+        g_orig = lambda x, seqlen, val: [
+            sample[0][x] + [val] * (seqlen - len(sample[0][x])) for sample in batch
+        ]  # 0: <pad>
+        g_aug = lambda x, seqlen, val: [
+            sample[1][x] + [val] * (seqlen - len(sample[1][x])) for sample in batch
+        ]  # 0: <pad>
+
+        # get maximal sequence length
+        orig_seqlens, aug_seqlens = f_orig(6), f_aug(6)
+        orig_maxlen, aug_maxlen = (
+            np.array(orig_seqlens).max(),
+            np.array(aug_seqlens).max(),
+        )
+
+        # get task name
+        tags = f_orig(3)
+        name = f_orig(7)
+
+        orig_words, aug_words = f_orig(0), f_aug(0)
+        x, aug_x = g_orig(1, orig_maxlen, 0), g_aug(1, aug_maxlen, 0)
+        orig_is_heads, aug_is_heads = f_orig(2), f_aug(2)
+        orig_mask, aug_mask = g_orig(4, orig_maxlen, 1), g_aug(4, aug_maxlen, 1)
+
+        y = g_orig(5, orig_maxlen, 0) if "_tagging" in name[0] else f_orig(5)
+        aug_y = g_aug(5, aug_maxlen, 0) if "_tagging" in name[0] else f_aug(5)
+
+        y = torch.Tensor(y) if isinstance(y[0], float) else torch.LongTensor(y)
+        aug_y = (
+            torch.Tensor(aug_y)
+            if isinstance(aug_y[0], float)
+            else torch.LongTensor(aug_y)
+        )
+
+        t = torch.LongTensor
+
+        return (
+            orig_words,
+            t(x),
+            orig_is_heads,
+            tags,
+            t(orig_mask),
+            y,
+            orig_seqlens,
+            name,
+        ), (aug_words, t(x), aug_is_heads, tags, t(aug_mask), aug_y, aug_seqlens, name)
 
 
 class DaconBaseDataset(SnippextDataset):
