@@ -17,10 +17,11 @@ class Augmenter(object):
 
     def __init__(self, idf_fn="data/wikitext-idf.dat", aug_distribution=None):
         self.idf_dict = pickle.load(open(idf_fn, "rb")) if idf_fn else None
+        device = "cuda" if torch.cuda.is_available() else "cpu"
         self.aug_distribution = (
             aug_distribution
-            if aug_distribution
-            else torch.zeros(7, device=torch.device)
+            if aug_distribution is not None
+            else torch.zeros(7, device=device)
         )
 
     def augment(self, tokens, labels, op="del", args=[]):
@@ -65,7 +66,7 @@ class Augmenter(object):
                     if pos1 < 0:
                         return tokens, labels
                     tokens = tokens[:pos1] + tokens[pos2 + 1 :]
-                    labels = tokens[:pos1] + labels[pos2 + 1 :]
+                    labels = labels[:pos1] + labels[pos2 + 1 :]
             elif "insert" in op:
                 pos1 = self.sample_position(tokens, labels, tfidf)
                 if pos1 < 0:
@@ -136,8 +137,8 @@ class Augmenter(object):
             "insert",
         ]
         if not op:
-            op_idx = np.argmax(gumbel_softmax(self.aug_distribution, tau=0.1))
-            tokens, labels = self.augment(ops[op_idx])
+            op_idx = torch.argmax(gumbel_softmax(self.aug_distribution, tau=0.1))
+            tokens, labels = self.augment(ops[op_idx], labels)
         elif op == "all":
             # RandAugment: https://arxiv.org/pdf/1909.13719.pdf
             N = 3

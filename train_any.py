@@ -207,6 +207,9 @@ if __name__ == "__main__":
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
 
+    if "supervised_consistency" in hp.da:
+        torch.multiprocessing.set_start_method('spawn')
+
     # create the tag of the run
     if hp.no_ssl:
         run_tag = "%s_lm=%s_da=%s_no_ssl_alpha=%.1f_id=%d" % (
