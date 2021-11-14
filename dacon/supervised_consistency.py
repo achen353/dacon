@@ -96,14 +96,14 @@ def train(model, train_set, optimizer, scheduler=None, batch_size=32, fp16=False
             del loss
 
 
-def initialize_and_train(task_config, trainset, validset, testset, hp, run_tag):
+def initialize_and_train(task_config, train_set, valid_set, test_set, hp, run_tag):
     """The train process.
 
     Args:
         task_config (dictionary): the configuration of the task
-        trainset (SnippextDataset): the training set
-        validset (SnippextDataset): the validation set
-        testset (SnippextDataset): the testset
+        train_set (SnippextDataset): the training set
+        valid_set (SnippextDataset): the validation set
+        test_set (SnippextDataset): the testset
         hp (Namespace): the parsed hyperparameters
         run_tag (string): the tag of the run (for logging purpose)
 
@@ -113,14 +113,14 @@ def initialize_and_train(task_config, trainset, validset, testset, hp, run_tag):
     # create iterators for validation and test
     padder = SnippextDataset.pad
     valid_iter = data.DataLoader(
-        dataset=validset,
+        dataset=valid_set,
         batch_size=hp.batch_size * 4,
         shuffle=False,
         num_workers=0,
         collate_fn=padder,
     )
     test_iter = data.DataLoader(
-        dataset=testset,
+        dataset=test_set,
         batch_size=hp.batch_size * 4,
         shuffle=False,
         num_workers=0,
@@ -141,7 +141,7 @@ def initialize_and_train(task_config, trainset, validset, testset, hp, run_tag):
             model, optimizer = amp.initialize(model, optimizer, opt_level="O2")
 
     # learning rate scheduler
-    num_steps = (len(trainset) // hp.batch_size) * hp.n_epochs
+    num_steps = (len(train_set) // hp.batch_size) * hp.n_epochs
     scheduler = get_linear_schedule_with_warmup(
         optimizer, num_warmup_steps=num_steps // 10, num_training_steps=num_steps
     )
@@ -157,7 +157,7 @@ def initialize_and_train(task_config, trainset, validset, testset, hp, run_tag):
     while epoch <= hp.n_epochs:
         train(
             model,
-            trainset,
+            train_set,
             optimizer,
             scheduler=scheduler,
             batch_size=hp.batch_size,
@@ -170,9 +170,9 @@ def initialize_and_train(task_config, trainset, validset, testset, hp, run_tag):
             model,
             task_config["name"],
             valid_iter,
-            validset,
+            valid_set,
             test_iter,
-            testset,
+            test_set,
             writer,
             run_tag,
         )

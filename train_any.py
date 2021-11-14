@@ -63,15 +63,15 @@ def get_cls_config(hp):
         path = "data/em/%s/" % name
         config = {
             "name": taskname,
-            "trainset": path + "train.txt",
-            "validset": path + "valid.txt",
-            "testset": path + "test.txt",
+            "train_set": path + "train.txt",
+            "valid_set": path + "valid.txt",
+            "test_set": path + "test.txt",
             "task_type": "classification",
             "vocab": vocab,
         }
 
-        config["unlabeled"] = config["trainset"]
-        config["validset"] = config["trainset"]
+        config["unlabeled"] = config["train_set"]
+        config["valid_set"] = config["train_set"]
 
         if hp.da in ["supervised_consistency"]:
             return config, DaconDataset, DaconDataset
@@ -90,9 +90,9 @@ def get_cls_config(hp):
         vocab = ["0", "1"]
         config = {
             "name": taskname,
-            "trainset": path + "train.txt",
-            "validset": path + "train.txt",
-            "testset": path + "test.txt",
+            "train_set": path + "train.txt",
+            "valid_set": path + "train.txt",
+            "test_set": path + "test.txt",
             "unlabeled": path + "unlabeled.txt",
             "task_type": "classification",
             "vocab": vocab,
@@ -111,9 +111,9 @@ def get_cls_config(hp):
         idx = str(hp.run_id)
         config = {
             "name": taskname,
-            "trainset": path + "train.txt.%s" % idx,
-            "validset": path + "valid.txt.%s" % idx,
-            "testset": path + "test.txt",
+            "train_set": path + "train.txt.%s" % idx,
+            "valid_set": path + "valid.txt.%s" % idx,
+            "test_set": path + "test.txt",
             "unlabeled": path + "train.txt.full",
             "task_type": "classification",
             "vocab": vocab,
@@ -141,9 +141,9 @@ def get_cls_config(hp):
 
         config = {
             "name": taskname,
-            "trainset": "%s/train.txt.%s" % (path, size),
-            "validset": "%s/valid.txt.%s" % (path, size),
-            "testset": "%s/test.txt" % path,
+            "train_set": "%s/train.txt.%s" % (path, size),
+            "valid_set": "%s/valid.txt.%s" % (path, size),
+            "test_set": "%s/test.txt" % path,
             "unlabeled": "%s/train.txt.full" % path,
             "task_type": "classification",
             "vocab": vocab,
@@ -234,24 +234,24 @@ if __name__ == "__main__":
 
     task = config["name"]
     vocab = config["vocab"]
-    trainset = config["trainset"]
-    validset = config["validset"]
-    testset = config["testset"]
+    train_set = config["train_set"]
+    valid_set = config["valid_set"]
+    test_set = config["test_set"]
     task_type = config["task_type"]
 
     if hp.da == "edbt20":
-        trainset += ".no_header"
-        validset += ".no_header"
-        testset += ".no_header"
+        train_set += ".no_header"
+        valid_set += ".no_header"
+        test_set += ".no_header"
 
     train_dataset = Dataset(
-        trainset, vocab, task, lm=hp.lm, max_len=hp.max_len, size=hp.size
+        train_set, vocab, task, lm=hp.lm, max_len=hp.max_len, size=hp.size
     )
 
     valid_dataset = TestDataset(
-        validset, vocab, task, lm=hp.lm, max_len=hp.max_len, size=hp.size
+        valid_set, vocab, task, lm=hp.lm, max_len=hp.max_len, size=hp.size
     )
-    test_dataset = TestDataset(testset, vocab, task, lm=hp.lm, max_len=hp.max_len)
+    test_dataset = TestDataset(test_set, vocab, task, lm=hp.lm, max_len=hp.max_len)
 
     # get default DA's
     ops = get_ops(hp)
@@ -272,7 +272,7 @@ if __name__ == "__main__":
 
         # the augmented training set
         w_aug_set = Dataset(
-            trainset,
+            train_set,
             vocab,
             task,
             size=hp.size,
@@ -282,7 +282,7 @@ if __name__ == "__main__":
         )
 
         s_aug_set = Dataset(
-            trainset,
+            train_set,
             vocab,
             task,
             size=hp.size,
@@ -317,7 +317,7 @@ if __name__ == "__main__":
         )
     else:  # normal DA or InvDA
         augment_dataset = Dataset(
-            trainset,
+            train_set,
             vocab,
             task,
             lm=hp.lm,
