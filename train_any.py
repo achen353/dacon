@@ -7,6 +7,7 @@ import torch
 
 from ditto.dataset import DittoDataset
 from rotom.dataset import TextCLSDataset
+from dacon.dataset import DaconDataset, DaconTextCLSDataset
 
 num_classes = {"AMAZON2": 2, "AMAZON5": 5, "AG": 4}
 
@@ -71,6 +72,10 @@ def get_cls_config(hp):
 
         config["unlabeled"] = config["trainset"]
         config["validset"] = config["trainset"]
+
+        if hp.da in ["supervised_consistency"]:
+            return config, DaconDataset, DaconDataset
+
         return config, DittoDataset, DittoDataset
     elif "cleaning_" in taskname:
         LL = taskname.split("_")
@@ -92,6 +97,10 @@ def get_cls_config(hp):
             "task_type": "classification",
             "vocab": vocab,
         }
+
+        if hp.da in ["supervised_consistency"]:
+            return config, DaconDataset, DaconDataset
+
         return config, DittoDataset, DittoDataset
     elif "compare" in taskname:
         # compare2_SST-2
@@ -109,6 +118,10 @@ def get_cls_config(hp):
             "task_type": "classification",
             "vocab": vocab,
         }
+
+        if hp.da in ["supervised_consistency"]:
+            return config, DaconTextCLSDataset, DaconTextCLSDataset
+
         return config, TextCLSDataset, TextCLSDataset
     else:
         # Text CLS datasets
@@ -135,6 +148,10 @@ def get_cls_config(hp):
             "task_type": "classification",
             "vocab": vocab,
         }
+
+        if hp.da in ["supervised_consistency"]:
+            return config, DaconDataset, DaconDataset
+
         return config, TextCLSDataset, TextCLSDataset
 
 
@@ -231,7 +248,6 @@ if __name__ == "__main__":
         trainset, vocab, task, lm=hp.lm, max_len=hp.max_len, size=hp.size
     )
 
-    # valid_dataset = Dataset(validset, vocab, task,
     valid_dataset = TestDataset(
         validset, vocab, task, lm=hp.lm, max_len=hp.max_len, size=hp.size
     )

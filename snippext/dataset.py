@@ -61,10 +61,6 @@ class SnippextDataset(data.Dataset):
         augment_op=None,
         size=None,
     ):
-        """TODO
-        Args:
-
-        """
         # tokens and tags
         sents, tags_li = [], []  # list of lists
         self.max_len = max_len

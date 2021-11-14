@@ -1,11 +1,9 @@
 import random
-import sys
 
 import jsonlines
 
 from .augment import Augmenter
 
-sys.path.insert(0, "Snippext_public")
 from transformers import InputExample
 
 from snippext.dataset import SnippextDataset, get_tokenizer
