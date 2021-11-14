@@ -5,9 +5,9 @@ from functools import partial
 import numpy as np
 import torch
 
+from dacon.dataset import DaconDataset, DaconTextCLSDataset
 from ditto.dataset import DittoDataset
 from rotom.dataset import TextCLSDataset
-from dacon.dataset import DaconDataset, DaconTextCLSDataset
 
 num_classes = {"AMAZON2": 2, "AMAZON5": 5, "AG": 4}
 

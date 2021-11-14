@@ -4,12 +4,13 @@ import numpy as np
 import torch
 import torch.nn as nn
 from apex import amp
-from ditto.dataset import *
-from snippext.model import MultiTaskNet
-from snippext.train_util import *
 from tensorboardX import SummaryWriter
 from torch.utils import data
 from transformers import AdamW, get_linear_schedule_with_warmup
+
+from ditto.dataset import *
+from snippext.model import MultiTaskNet
+from snippext.train_util import *
 
 
 def train(model, train_set, optimizer, scheduler=None, batch_size=32, fp16=False):

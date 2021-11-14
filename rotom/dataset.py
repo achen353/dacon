@@ -1,12 +1,11 @@
 import random
 
 import jsonlines
-
-from .augment import Augmenter
-
 from transformers import InputExample
 
 from snippext.dataset import SnippextDataset, get_tokenizer
+
+from .augment import Augmenter
 
 
 class BaseDataset(SnippextDataset):

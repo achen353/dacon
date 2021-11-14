@@ -1,10 +1,8 @@
-from ditto.dataset import DittoDataset
-from rotom.dataset import TextCLSDataset
-
 from augment import Augmenter
-
 from transformers import InputExample
 
+from ditto.dataset import DittoDataset
+from rotom.dataset import TextCLSDataset
 from snippext.dataset import get_tokenizer
 
 
