@@ -208,7 +208,9 @@ if __name__ == "__main__":
         torch.cuda.manual_seed_all(seed)
 
     if "supervised_consistency" in hp.da and hp.da != "supervised_consistency":
-        raise argparse.ArgumentError("``supervised_consistency'' cannot be specified along with other DA operators.")
+        raise argparse.ArgumentError(
+            "``supervised_consistency'' cannot be specified along with other DA operators."
+        )
 
     if hp.da == "supervised_consistency":
         torch.multiprocessing.set_start_method("spawn")
