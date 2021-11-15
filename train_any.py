@@ -222,7 +222,12 @@ if __name__ == "__main__":
 
     if "dacon" in hp.da:
         torch.multiprocessing.set_start_method("spawn")
-        if hp.da not in ["dacon_baseline", "dacon_one_to_many", "dacon_fix_consistency", "dacon_consistency"]:
+        if hp.da not in [
+            "dacon_baseline",
+            "dacon_one_to_many",
+            "dacon_fix_consistency",
+            "dacon_consistency",
+        ]:
             raise argparse.ArgumentError(
                 "Incorrect argument value for dacon variants. Expected "
                 "``dacon_baseline'', ``dacon_one_to_many'', ``dacon_fix_consistency'', ``dacon_consistency''"

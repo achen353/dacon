@@ -131,7 +131,11 @@ class Augmenter(object):
         if op == "dacon_baseline":
             da_op = random.choice(ops)
             tokens = self.augment(da_op, labels)[0]
-        elif op in ["dacon_one_to_many", "dacon_fixed_consistency", "dacon_consistency"]:
+        elif op in [
+            "dacon_one_to_many",
+            "dacon_fixed_consistency",
+            "dacon_consistency",
+        ]:
             tokens_list = [self.augment(da_op, labels)[0] for da_op in ops]
             results = [" ".join(tokens) for tokens in tokens_list]
             return results

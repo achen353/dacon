@@ -16,7 +16,15 @@ from snippext.train_util import *
 # from scipy.special import kl_div
 
 
-def train(model, train_set, optimizer, dacon_type="dacon_baseline", scheduler=None, batch_size=32, fp16=False):
+def train(
+    model,
+    train_set,
+    optimizer,
+    dacon_type="dacon_baseline",
+    scheduler=None,
+    batch_size=32,
+    fp16=False,
+):
     """Perfrom one epoch of the training process.
 
     Args:
