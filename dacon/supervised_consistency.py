@@ -88,7 +88,7 @@ def train(
 
         loss = orig_ce_loss
 
-        with torch.no_grad:
+        with torch.no_grad():
             orig_logits_for_kl_div, _, _ = model(x, y, task=taskname)
             orig_logits_for_kl_div = (
                 orig_logits_for_kl_div.view(-1)
@@ -268,7 +268,7 @@ def initialize_and_train(
             model,
             train_set,
             optimizer,
-            dacon_type,
+            dacon_type=hp.da,
             scheduler=scheduler,
             batch_size=hp.batch_size,
             fp16=hp.fp16,

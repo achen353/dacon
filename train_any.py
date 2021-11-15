@@ -73,7 +73,7 @@ def get_cls_config(hp):
         config["unlabeled"] = config["train_set"]
         config["valid_set"] = config["train_set"]
 
-        if hp.da == "supervised_consistency":
+        if "dacon" in hp.da:
             return config, DaconDataset, DittoDataset
 
         return config, DittoDataset, DittoDataset
@@ -98,7 +98,7 @@ def get_cls_config(hp):
             "vocab": vocab,
         }
 
-        if hp.da == "supervised_consistency":
+        if "dacon" in hp.da:
             return config, DaconDataset, DittoDataset
 
         return config, DittoDataset, DittoDataset
@@ -119,7 +119,7 @@ def get_cls_config(hp):
             "vocab": vocab,
         }
 
-        if hp.da == "supervised_consistency":
+        if "dacon" in hp.da:
             return config, DaconTextCLSDataset, TextCLSDataset
 
         return config, TextCLSDataset, TextCLSDataset
@@ -149,7 +149,7 @@ def get_cls_config(hp):
             "vocab": vocab,
         }
 
-        if hp.da == "supervised_consistency":
+        if "dacon" in hp.da:
             return config, DaconDataset, DittoDataset
 
         return config, TextCLSDataset, TextCLSDataset
@@ -220,7 +220,7 @@ if __name__ == "__main__":
     #                       JS divergence with trainable weights
     #    * Loss: CE(x, y_true) + CE(x_aug_1, y_true) + ... + CE(x_aug_n, y_true) + weighted JS divergence
 
-    if "dacon" in hp.da:
+    if hp.da and "dacon" in hp.da:
         torch.multiprocessing.set_start_method("spawn")
         if hp.da not in [
             "dacon_baseline",
@@ -282,7 +282,7 @@ if __name__ == "__main__":
     # get default DA's
     ops = get_ops(hp)
 
-    if hp.da is None or hp.da in ["None", "edbt20"]:
+    if not hp.da or hp.da in ["None", "edbt20"]:
         # No DA
         from snippext.baseline import initialize_and_train
 
