@@ -1,14 +1,11 @@
 import random
-import sys
 
 import jsonlines
-
-from .augment import Augmenter
-
-sys.path.insert(0, "Snippext_public")
 from transformers import InputExample
 
 from snippext.dataset import SnippextDataset, get_tokenizer
+
+from .augment import Augmenter
 
 
 class BaseDataset(SnippextDataset):
@@ -47,30 +44,22 @@ class BaseDataset(SnippextDataset):
             text_b = None
         label = self.examples[idx].label
 
-        if len(ops) > 0 and ops[0][0] == "t5":
+        if len(ops) and ops[0][0] == "t5":
             examples = self.t5_examples[idx]
-            if len(examples) > 0:
-                if aug_idx is None:
-                    e = random.choice(examples)
-                else:
-                    e = examples[aug_idx]
-                text_a = e.text_a
-                text_b = e.text_b
-        elif len(ops) > 0:
-            if text_b is not None:
-                combined = text_a + " [SEP] " + text_b
-            else:
-                combined = text_a
+            if len(examples):
+                e = random.choice(examples) if aug_idx else examples[aug_idx]
+                text_a, text_b = e.text_a, e.text_b
+        elif len(ops):
+            combined = text_a + " [SEP] " + text_b if text_b else text_a
 
             for op_args in ops:
                 op, args = op_args
                 combined = self.augmenter.augment_sent(combined, op, args=args)
 
-            if text_b is not None:
-                if " [SEP] " in combined:
-                    text_a, text_b = combined.split(" [SEP] ")
+            if " [SEP] " in combined:
+                text_a, text_b = combined.split(" [SEP] ")
             else:
-                text_a = combined
+                text_a, text_b = combined, None
 
         x = self.tokenizer.encode(
             text=text_a,
@@ -85,26 +74,17 @@ class BaseDataset(SnippextDataset):
             # regression
             y = float(label)
         else:
-            if label in self.tag2idx:
-                y = self.tag2idx[label]  # label
-            else:
-                y = 0
-        is_heads = [1] * len(x)
-        mask = [1] * len(x)
+            y = self.tag2idx[label] if label in self.tag2idx else 0
+
+        is_heads, mask, seqlen = [1] * len(x), [1] * len(x), len(x)
 
         assert (
             len(x) == len(mask) == len(is_heads)
-        ), f"len(x)={len(x)}, len(y)={len(y)}, len(is_heads)={len(is_heads)}"
-        # seqlen
-        seqlen = len(mask)
+        ), f"len(x) = {len(x)}, len(y)={len(y)}, len(is_heads)={len(is_heads)}"
 
-        # text for logging
-        if text_b is None:
-            log_text = text_a
-        else:
-            log_text = text_a + " [SEP] " + text_b
+        words = text_a + " [SEP] " + text_b if text_b else text_a
 
-        return log_text, x, is_heads, label, mask, y, seqlen, self.taskname
+        return words, x, is_heads, label, mask, y, seqlen, self.taskname
 
 
 class TextCLSDataset(BaseDataset):

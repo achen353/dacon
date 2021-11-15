@@ -31,12 +31,13 @@ CUDA_VISIBLE_DEVICES=0 python train_any.py \
   --max_len 128 \
   --fp16 \
   --lm roberta \
-  --da auto_filter_weight \
+  --da dacon_baseline \
   --balance \
   --run_id 0
 ```
 
 The current version supports 3 tasks: entity matching (EM), error detection (EDT), and text classification (TextCLS). The supported tasks are:
+
 | Type    | Dataset Names                                                        | taskname pattern                         |
 |---------|----------------------------------------------------------------------|------------------------------------------|
 | EM      | Abt-Buy, Amazon-Google, DBLP-ACM, DBLP-GoogleScholar, Walmart-Amazon | em_{dataset}, e.g., em_DBLP-ACM          |
@@ -65,6 +66,10 @@ Parameters:
 |          Inversed DA (InvDA)         |                                                                                 t5 / invda                                                                                |
 | Rotom (w/o semi-supervised learning) |                                                                         auto_filter_weight_no_ssl                                                                         |
 |  Rotom (w. semi-supervised learning) |                                                                             auto_filter_weight                                                                            |
+|           DACon Baseline             |                                                                             dacon_baseline                                                                                |
+|         DACon One-to-Many            |                                                                             dacon_one_to_many                                                                             |
+| DACon Consistency Loss (w/ fixed JS-divergence)    |                                                               dacon_fixed_consistency                                                                       |
+| DACon Consistency Loss (w/ weighted JS-divergence) |                                                               dacon_consistency                                                                             |
 
 For the invda fine-tuning, see ``invda/README.md``.
 
