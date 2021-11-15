@@ -128,19 +128,21 @@ class Augmenter(object):
             "token_repl_tfidf",
             "insert",
         ]
-        if not op:
-            tokens_list = [self.augment(op, labels)[0] for op in ops]
-            results_list = [" ".join(tokens) for tokens in tokens_list]
-            return results_list
-
-        if op == "all":
+        if op == "dacon_baseline":
+            da_op = random.choice(ops)
+            tokens = self.augment(da_op, labels)[0]
+        elif op in ["dacon_one_to_many", "dacon_fixed_consistency", "dacon_consistency"]:
+            tokens_list = [self.augment(da_op, labels)[0] for da_op in ops]
+            results = [" ".join(tokens) for tokens in tokens_list]
+            return results
+        elif op == "all":
             # RandAugment: https://arxiv.org/pdf/1909.13719.pdf
             N = 3
             for op in random.choices(ops, k=N):
                 tokens, labels = self.augment(tokens, labels, op=op)
         else:
-            tokens, labels = self.augment(tokens, labels, op=op, args=args)
-        results = " ".join(tokens)
+            tokens = self.augment(tokens, labels, op=op, args=args)[0]
+        results = [" ".join(tokens)]
         return results
 
     def sample_span(self, tokens, labels, span_len=3):

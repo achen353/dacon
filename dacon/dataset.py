@@ -17,6 +17,7 @@ class DaconDataset(DittoDataset):
         lm="distilbert",
         size=None,
         augmenter=Augmenter(),
+        dacon_type="dacon_baseline",
         balance=False,
     ):
         super().__init__(
@@ -29,6 +30,7 @@ class DaconDataset(DittoDataset):
             balance=balance,
         )
         self.augmenter = augmenter
+        self.dacon_type = dacon_type
 
     def __getitem__(self, idx):
         """Return the ith item of in the dataset.
@@ -51,7 +53,7 @@ class DaconDataset(DittoDataset):
                 idx = new_idx
 
         orig_words, tags = self.sents[idx], self.tags_li[idx]
-        aug_words_list = self.augmenter.augment_sent(orig_words)
+        aug_words_list = self.augmenter.augment_sent(orig_words, op=self.dacon_type)
 
         # encode orig_words to token_ids
         if " [SEP] " in orig_words:
@@ -276,6 +278,7 @@ class DaconBaseDataset(SnippextDataset):
         max_len=512,
         lm="bert",
         augmenter=Augmenter(),
+        dacon_type="dacon_baseline",
         size=None,
     ):
         super().__init__(
@@ -415,6 +418,7 @@ class DaconTextCLSDataset(DaconBaseDataset):
         max_len=512,
         lm="distilbert",
         augmenter=Augmenter(),
+        dacon_type="dacon_baseline",
         size=None,
     ):
         self.taskname = taskname

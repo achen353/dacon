@@ -13,8 +13,10 @@ from dacon.model import MultiTaskNet
 from snippext.dataset import SnippextDataset, get_tokenizer
 from snippext.train_util import *
 
+# from scipy.special import kl_div
 
-def train(model, train_set, optimizer, scheduler=None, batch_size=32, fp16=False):
+
+def train(model, train_set, optimizer, dacon_type="dacon_baseline", scheduler=None, batch_size=32, fp16=False):
     """Perfrom one epoch of the training process.
 
     Args:
@@ -78,6 +80,15 @@ def train(model, train_set, optimizer, scheduler=None, batch_size=32, fp16=False
 
         loss = orig_ce_loss
 
+        with torch.no_grad:
+            orig_logits_for_kl_div, _, _ = model(x, y, task=taskname)
+            orig_logits_for_kl_div = (
+                orig_logits_for_kl_div.view(-1)
+                if "sts-b" in taskname
+                else orig_logits_for_kl_div.view(-1, orig_logits_for_kl_div.shape[-1])
+            )
+
+        logits_for_kl_div = [orig_logits_for_kl_div]
         for aug_sample in aug_batch:
             (
                 aug_words,
@@ -98,6 +109,13 @@ def train(model, train_set, optimizer, scheduler=None, batch_size=32, fp16=False
             aug_y = aug_y.view(-1)
             aug_ce_loss = criterion(aug_logits, aug_y)
             loss += aug_ce_loss
+
+            if dacon_type in ["dacon_fixed_consistency", "dacon_consistency"]:
+                logits_for_kl_div.append(aug_logits)
+
+        if dacon_type in ["dacon_fixed_consistency", "dacon_consistency"]:
+            # TODO: Add calculation for JS divergence
+            pass
 
         # back propagation
         if fp16:
@@ -195,6 +213,7 @@ def initialize_and_train(
         lm=hp.lm,
         max_len=hp.max_len,
         size=hp.size,
+        dacon_type=hp.da,
     )
 
     # create iterators for validation and test data
@@ -241,6 +260,7 @@ def initialize_and_train(
             model,
             train_set,
             optimizer,
+            dacon_type,
             scheduler=scheduler,
             batch_size=hp.batch_size,
             fp16=hp.fp16,
