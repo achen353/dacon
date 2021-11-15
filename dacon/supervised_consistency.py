@@ -130,25 +130,25 @@ def train(model, train_set, optimizer, scheduler=None, batch_size=32, fp16=False
             print("orig_mask: ", orig_mask[0])
             print("orig_seqlen: ", orig_seqlens[0])
             print("task_name: ", taskname)
-            print("-----augmented data----")
-            print("aug_words: ", aug_words[0])
-            print("aug_x: ", x.cpu().numpy()[0][: aug_seqlens[0]])
-            print(
-                "aug_tokens: ",
-                get_tokenizer().convert_ids_to_tokens(x.cpu().numpy()[0])[
-                    : aug_seqlens[0]
-                ],
-            )
-            print("aug_is_heads: ", aug_is_heads[0])
-            y_sample = _y.cpu().numpy()[0]
-            if np.isscalar(y_sample):
-                print("y: ", y_sample)
-            else:
-                print("y: ", y_sample[: aug_seqlens[0]])
-            print("tags: ", tags[0])
-            print("aug_mask: ", aug_mask[0])
-            print("aug_seqlen: ", aug_seqlens[0])
-            print("task_name: ", taskname)
+            # print("-----augmented data----")
+            # print("aug_words: ", aug_words[0])
+            # print("aug_x: ", x.cpu().numpy()[0][: aug_seqlens[0]])
+            # print(
+            #     "aug_tokens: ",
+            #     get_tokenizer().convert_ids_to_tokens(x.cpu().numpy()[0])[
+            #         : aug_seqlens[0]
+            #     ],
+            # )
+            # print("aug_is_heads: ", aug_is_heads[0])
+            # y_sample = _y.cpu().numpy()[0]
+            # if np.isscalar(y_sample):
+            #     print("y: ", y_sample)
+            # else:
+            #     print("y: ", y_sample[: aug_seqlens[0]])
+            # print("tags: ", tags[0])
+            # print("aug_mask: ", aug_mask[0])
+            # print("aug_seqlen: ", aug_seqlens[0])
+            # print("task_name: ", taskname)
             print("----aug_distribution---")
             print("aug_distribution: ", model.aug_distribution)
             print("=======================")

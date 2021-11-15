@@ -176,17 +176,22 @@ class DaconDataset(DittoDataset):
         def f_aug(x):
             output = []
             for sample in batch:
+                per_sample = []
                 for aug_x_result in sample[1]:
-                    output.append(aug_x_result[x])
+                    per_sample.append(aug_x_result[x])
+                output.append(per_sample)
             return output
 
         def g_aug(x, seqlen_list, val):
             output = []
             for sample in batch:
+                per_sample = []
                 for i, aug_x_result in enumerate(sample[1]):
-                    output.append(
-                        aug_x_result[x] + [val] * seqlen_list[i] - len(aug_x_result[x])
+                    per_sample.append(
+                        aug_x_result[x] + [val] * (seqlen_list[i] - len(aug_x_result[x]))
                     )
+                output.append(per_sample)
+            return output
 
         # get task name
         tags, name = f_orig(3), f_orig(7)
@@ -227,8 +232,14 @@ class DaconDataset(DittoDataset):
 
         t = torch.LongTensor
 
-        aug_x_list = [t(aug_x) for aug_x in aug_x_list]
-        aug_mask_list = [t(aug_mask) for aug_mask in aug_mask_list]
+        aug_x_list, aug_mask_list = [], []
+        for aug_x_sample, aug_mask_sample in zip(aug_x_list, aug_mask_list):
+            aug_x_per_sample, aug_mask_per_sample = [], []
+            for aug_x, aug_mask in zip(aug_x_sample, aug_mask_sample):
+                aug_x_per_sample.append(t(aug_x))
+                aug_mask_per_sample.append(t(aug_mask))
+            aug_x_list.append(aug_x_per_sample)
+            aug_mask_list.append(aug_mask_per_sample)
 
         aug_x_results = list(
             zip(
