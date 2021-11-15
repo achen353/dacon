@@ -73,7 +73,7 @@ def get_cls_config(hp):
         config["unlabeled"] = config["train_set"]
         config["valid_set"] = config["train_set"]
 
-        if "dacon" in hp.da:
+        if hp.da and "dacon" in hp.da:
             return config, DaconDataset, DittoDataset
 
         return config, DittoDataset, DittoDataset
@@ -98,7 +98,7 @@ def get_cls_config(hp):
             "vocab": vocab,
         }
 
-        if "dacon" in hp.da:
+        if hp.da and "dacon" in hp.da:
             return config, DaconDataset, DittoDataset
 
         return config, DittoDataset, DittoDataset
@@ -119,7 +119,7 @@ def get_cls_config(hp):
             "vocab": vocab,
         }
 
-        if "dacon" in hp.da:
+        if hp.da and "dacon" in hp.da:
             return config, DaconTextCLSDataset, TextCLSDataset
 
         return config, TextCLSDataset, TextCLSDataset
@@ -149,7 +149,7 @@ def get_cls_config(hp):
             "vocab": vocab,
         }
 
-        if "dacon" in hp.da:
+        if hp.da and "dacon" in hp.da:
             return config, DaconDataset, DittoDataset
 
         return config, TextCLSDataset, TextCLSDataset
