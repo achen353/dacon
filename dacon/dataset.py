@@ -188,7 +188,8 @@ class DaconDataset(DittoDataset):
                 per_sample = []
                 for i, aug_x_result in enumerate(sample[1]):
                     per_sample.append(
-                        aug_x_result[x] + [val] * (seqlen_list[i] - len(aug_x_result[x]))
+                        aug_x_result[x]
+                        + [val] * (seqlen_list[i] - len(aug_x_result[x]))
                     )
                 output.append(per_sample)
             return output
