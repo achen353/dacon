@@ -40,54 +40,52 @@ class Augmenter(object):
             list of strings: the augmented tokens
             list of strings: the augmented labels
         """
-        N = 3
         tfidf = "tfidf" in op
-        for _ in range(N):
-            if "del" in op:
-                if "token_del" in op:
-                    pos1 = self.sample_position(tokens, labels, tfidf)
-                    if pos1 < 0:
-                        return tokens, labels
-                    tokens = tokens[:pos1] + tokens[pos1 + 1 :]
-                    labels = labels[:pos1] + labels[pos1 + 1 :]
-                else:
-                    # insert padding to keep the length consistent
-                    max_len = args[0] if len(args) > 0 else 2
-                    span_len = random.randint(1, max_len)
-                    pos1, pos2 = self.sample_span(tokens, labels, span_len=span_len)
-                    if pos1 < 0:
-                        return tokens, labels
-                    tokens = tokens[:pos1] + tokens[pos2 + 1 :]
-                    labels = labels[:pos1] + labels[pos2 + 1 :]
-            elif "insert" in op:
+        if "del" in op:
+            if "token_del" in op:
                 pos1 = self.sample_position(tokens, labels, tfidf)
                 if pos1 < 0:
                     return tokens, labels
-                ins_token = self.sample_token(tokens[pos1])
-                if ins_token.lower() != tokens[pos1].lower():
-                    tokens = tokens[:pos1] + [ins_token] + tokens[pos1:]
-                    labels = labels[:pos1] + ["O"] + labels[pos1:]
-                else:
-                    tokens, labels = tokens, labels
-            elif "repl" in op:
-                pos1 = self.sample_position(tokens, labels, tfidf)
-                if pos1 < 0:
-                    return tokens, labels
-                ins_token = self.sample_token(tokens[pos1])
-                tokens = tokens[:pos1] + [ins_token] + tokens[pos1 + 1 :]
-                labels = labels[:pos1] + ["O"] + labels[pos1 + 1 :]
-            elif "shuffle" in op:
-                max_len = args[0] if len(args) > 0 else 4
-                span_len = random.randint(2, max_len)
+                tokens = tokens[:pos1] + tokens[pos1 + 1 :]
+                labels = labels[:pos1] + labels[pos1 + 1 :]
+            else:
+                # insert padding to keep the length consistent
+                max_len = args[0] if len(args) > 0 else 2
+                span_len = random.randint(1, max_len)
                 pos1, pos2 = self.sample_span(tokens, labels, span_len=span_len)
                 if pos1 < 0:
                     return tokens, labels
-                sub_arr = tokens[pos1 : pos2 + 1]
-                random.shuffle(sub_arr)
-                tokens = tokens[:pos1] + sub_arr + tokens[pos2 + 1 :]
-                labels = tokens[:pos1] + ["O"] * (pos2 - pos1 + 1) + labels[pos2 + 1 :]
-            else:
+                tokens = tokens[:pos1] + tokens[pos2 + 1 :]
+                labels = labels[:pos1] + labels[pos2 + 1 :]
+        elif "insert" in op:
+            pos1 = self.sample_position(tokens, labels, tfidf)
+            if pos1 < 0:
                 return tokens, labels
+            ins_token = self.sample_token(tokens[pos1])
+            if ins_token.lower() != tokens[pos1].lower():
+                tokens = tokens[:pos1] + [ins_token] + tokens[pos1:]
+                labels = labels[:pos1] + ["O"] + labels[pos1:]
+            else:
+                tokens, labels = tokens, labels
+        elif "repl" in op:
+            pos1 = self.sample_position(tokens, labels, tfidf)
+            if pos1 < 0:
+                return tokens, labels
+            ins_token = self.sample_token(tokens[pos1])
+            tokens = tokens[:pos1] + [ins_token] + tokens[pos1 + 1 :]
+            labels = labels[:pos1] + ["O"] + labels[pos1 + 1 :]
+        elif "shuffle" in op:
+            max_len = args[0] if len(args) > 0 else 4
+            span_len = random.randint(2, max_len)
+            pos1, pos2 = self.sample_span(tokens, labels, span_len=span_len)
+            if pos1 < 0:
+                return tokens, labels
+            sub_arr = tokens[pos1 : pos2 + 1]
+            random.shuffle(sub_arr)
+            tokens = tokens[:pos1] + sub_arr + tokens[pos2 + 1 :]
+            labels = tokens[:pos1] + ["O"] * (pos2 - pos1 + 1) + labels[pos2 + 1 :]
+        else:
+            return tokens, labels
 
         return tokens, labels
 
