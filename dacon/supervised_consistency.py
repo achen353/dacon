@@ -3,17 +3,15 @@ import os
 import numpy as np
 import torch
 import torch.nn as nn
-from apex import amp
 from tensorboardX import SummaryWriter
 from torch.utils import data
 from transformers import AdamW, get_linear_schedule_with_warmup
 
+from apex import amp
 from dacon.dataset import DaconDataset
 from dacon.model import MultiTaskNet
 from snippext.dataset import SnippextDataset, get_tokenizer
 from snippext.train_util import *
-
-# from scipy.special import kl_div
 
 
 def train(
@@ -24,6 +22,7 @@ def train(
     scheduler=None,
     batch_size=32,
     fp16=False,
+    device="cpu",
 ):
     """Perfrom one epoch of the training process.
 
@@ -74,6 +73,8 @@ def train(
         else:
             criterion = classifier_criterion
 
+        softmax = nn.Softmax(dim=-1)
+
         # forward
         optimizer.zero_grad()
 
@@ -96,7 +97,7 @@ def train(
                 else orig_logits_for_kl_div.view(-1, orig_logits_for_kl_div.shape[-1])
             )
 
-        logits_for_kl_div = [orig_logits_for_kl_div]
+        logits_for_kl_div = [softmax(orig_logits_for_kl_div)]
         for aug_sample in aug_batch:
             (
                 aug_words,
@@ -119,11 +120,43 @@ def train(
             loss += aug_ce_loss
 
             if dacon_type in ["dacon_fixed_consistency", "dacon_consistency"]:
-                logits_for_kl_div.append(aug_logits)
+                logits_for_kl_div.append(softmax(aug_logits))
 
         if dacon_type in ["dacon_fixed_consistency", "dacon_consistency"]:
-            # TODO: Add calculation for JS divergence
-            pass
+            if dacon_type == "dacon_fixed_consistency":
+                q = torch.stack(logits_for_kl_div).mean(dim=0)
+                kl_divs = [
+                    torch.sum(
+                        torch.where(
+                            p != 0.0,
+                            p * torch.log(p / q),
+                            torch.zeros(1, device=device),
+                        ),
+                        dim=-1,
+                    )
+                    for p in logits_for_kl_div
+                ]
+                js_div = torch.stack(kl_divs).mean(dim=0).sum()
+            else:
+                # under fp16, need to cast model parameters to float
+                q = torch.einsum(
+                    "bdw,b->dw",
+                    torch.stack(logits_for_kl_div),
+                    softmax(model.aug_distribution),
+                )
+                kl_divs = [
+                    torch.sum(
+                        torch.where(
+                            p != 0, p * torch.log(p / q), torch.zeros(1, device=device)
+                        ),
+                        dim=-1,
+                    )
+                    for p in logits_for_kl_div
+                ]
+                js_div = (
+                    softmax(model.aug_distribution).float() @ torch.stack(kl_divs)
+                ).sum()
+            loss += js_div
 
         # back propagation
         if fp16:
@@ -272,6 +305,7 @@ def initialize_and_train(
             scheduler=scheduler,
             batch_size=hp.batch_size,
             fp16=hp.fp16,
+            device=device,
         )
 
         print(f"=========eval at epoch={epoch}=========")
