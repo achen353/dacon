@@ -13,7 +13,8 @@ Install required packages
 pip install -r requirements.txt
 # Apex requires CUDA-supported graphic cards (Nvidia graphic cards)
 git clone https://github.com/NVIDIA/apex.git
-pip install -v --disable-pip-version-check --no-cache-dir ./apex
+cd apex
+pip install -v --disable-pip-version-check --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" ./
 ```
 
 ## Model Training
