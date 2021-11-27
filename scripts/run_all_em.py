@@ -17,7 +17,18 @@ n_epochs_list = [20, 20, 20, 20]
 
 import os
 
-for da in ["None", "edbt20", "del", "invda", "auto_ssl_no_ssl", "auto_ssl"]:
+for da in [
+    "None",
+    "edbt20",
+    "del",
+    "invda",
+    "auto_ssl_no_ssl",
+    "auto_ssl",
+    "dacon_baseline",
+    "dacon_one_to_many",
+    "dacon_fixed_consistency",
+    "dacon_consistency",
+]:
     if "no_ssl" in da:
         da = da.replace("_no_ssl", "")
         no_ssl = True
