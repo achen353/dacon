@@ -395,4 +395,4 @@ if __name__ == "__main__":
     duration = end - start
 
     with open("execution_time.txt", "a") as time_file:
-        time_file.write(f"{run_tag},{duration:.04e}\n")
+        time_file.write(f"{run_tag},{duration:.04f}\n")
