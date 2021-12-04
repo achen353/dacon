@@ -9,6 +9,9 @@ from dacon.dataset import DaconDataset, DaconTextCLSDataset
 from ditto.dataset import DittoDataset
 from rotom.dataset import TextCLSDataset
 
+import time
+import os
+
 num_classes = {"AMAZON2": 2, "AMAZON5": 5, "AG": 4}
 
 vocabs = {
@@ -220,6 +223,9 @@ if __name__ == "__main__":
     #                       JS divergence with trainable weights
     #    * Loss: CE(x, y_true) + CE(x_aug_1, y_true) + ... + CE(x_aug_n, y_true) + weighted JS divergence
 
+    torch.cuda.synchronize()
+    start = time.perf_counter()
+
     if hp.da and "dacon" in hp.da:
         torch.multiprocessing.set_start_method("spawn")
         if hp.da not in [
@@ -384,3 +390,12 @@ if __name__ == "__main__":
                 hp,
                 run_tag,
             )
+
+    torch.cuda.synchronize()
+    end = time.perf_counter()
+
+    duration = end - start
+
+    time_result_filepath = os.path.join(hp.logdir, "execution-time.txt")
+    with open(time_result_filepath, "a") as time_file:
+        time_file.write(f"{run_tag},{duration:.02e}\n")
