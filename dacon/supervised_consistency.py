@@ -117,7 +117,7 @@ def train(
             )
             aug_y = aug_y.view(-1)
             aug_ce_loss = criterion(aug_logits, aug_y)
-            loss += aug_ce_loss
+            loss += aug_ce_loss * 1.0 / len(aug_batch)
 
             if dacon_type in ["dacon_fixed_consistency", "dacon_consistency"]:
                 logits_for_kl_div.append(softmax(aug_logits))
