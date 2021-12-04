@@ -1,5 +1,5 @@
 import argparse
-import os
+
 import random
 import time
 from functools import partial
@@ -222,9 +222,6 @@ if __name__ == "__main__":
     #                       JS divergence with trainable weights
     #    * Loss: CE(x, y_true) + CE(x_aug_1, y_true) + ... + CE(x_aug_n, y_true) + weighted JS divergence
 
-    torch.cuda.synchronize()
-    start = time.perf_counter()
-
     if hp.da and "dacon" in hp.da:
         torch.multiprocessing.set_start_method("spawn")
         if hp.da not in [
@@ -285,6 +282,9 @@ if __name__ == "__main__":
 
     # get default DA's
     ops = get_ops(hp)
+
+    torch.cuda.synchronize()
+    start = time.perf_counter()
 
     if not hp.da or hp.da in ["None", "edbt20"]:
         # No DA
@@ -395,6 +395,5 @@ if __name__ == "__main__":
 
     duration = end - start
 
-    time_result_filepath = os.path.join(hp.logdir, "execution-time.txt")
-    with open(time_result_filepath, "a") as time_file:
-        time_file.write(f"{run_tag},{duration:.02e}\n")
+    with open("execution_time.txt", "a") as time_file:
+        time_file.write(f"{run_tag},{duration:.04e}\n")
