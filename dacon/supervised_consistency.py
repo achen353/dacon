@@ -97,6 +97,8 @@ def train(
                 else orig_logits_for_kl_div.view(-1, orig_logits_for_kl_div.shape[-1])
             )
 
+        joint_aug_ce_loss = 0
+
         logits_for_kl_div = [softmax(orig_logits_for_kl_div)]
         for aug_sample in aug_batch:
             (
@@ -117,10 +119,12 @@ def train(
             )
             aug_y = aug_y.view(-1)
             aug_ce_loss = criterion(aug_logits, aug_y)
-            loss += aug_ce_loss
+            joint_aug_ce_loss += aug_ce_loss * 1.0 / len(aug_batch)
 
             if dacon_type in ["dacon_fixed_consistency", "dacon_consistency"]:
                 logits_for_kl_div.append(softmax(aug_logits))
+
+        loss += joint_aug_ce_loss
 
         if dacon_type in ["dacon_fixed_consistency", "dacon_consistency"]:
             if dacon_type == "dacon_fixed_consistency":
