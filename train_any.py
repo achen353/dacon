@@ -1,5 +1,6 @@
 import argparse
 import random
+import time
 from functools import partial
 
 import numpy as np
@@ -281,6 +282,9 @@ if __name__ == "__main__":
     # get default DA's
     ops = get_ops(hp)
 
+    torch.cuda.synchronize()
+    start = time.perf_counter()
+
     if not hp.da or hp.da in ["None", "edbt20"]:
         # No DA
         from snippext.baseline import initialize_and_train
@@ -384,3 +388,11 @@ if __name__ == "__main__":
                 hp,
                 run_tag,
             )
+
+    torch.cuda.synchronize()
+    end = time.perf_counter()
+
+    duration = end - start
+
+    with open("execution_time.txt", "a") as time_file:
+        time_file.write(f"{run_tag},{duration:.04f}\n")
