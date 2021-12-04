@@ -142,7 +142,7 @@ def train(
                 q = torch.einsum(
                     "bdw,b->dw",
                     torch.stack(logits_for_kl_div),
-                    softmax(model.aug_distribution),
+                    softmax(model.aug_distribution).float(),
                 )
                 kl_divs = [
                     torch.sum(
