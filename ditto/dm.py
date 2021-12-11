@@ -2,6 +2,7 @@ import argparse
 import os
 import random
 import sys
+import time
 
 import numpy as np
 import sklearn.metrics as metrics
@@ -260,4 +261,18 @@ if __name__ == "__main__":
     testset = DMDataset(test_path, lm=hp.lm)
 
     run_tag = "em_%s_da=%s_id=%d_size=%d" % (hp.task, "dm", hp.run_id, hp.size)
+
+    torch.cuda.synchronize()
+    start = time.perf_counter()
+
     train(trainset, validset, testset, hp)
+
+    torch.cuda.synchronize()
+    end = time.perf_counter()
+
+    duration = end - start
+
+    with open(
+        os.path.join(os.path.dirname(__file__), "../execution_time.csv"), "a"
+    ) as time_file:
+        time_file.write(f"{run_tag},{duration:.04f}\n")
