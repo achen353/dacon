@@ -5,7 +5,8 @@ import traceback
 
 import click
 import pandas as pd
-from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
+from tensorboard.backend.event_processing.event_accumulator import \
+    EventAccumulator
 
 
 # Extraction function
