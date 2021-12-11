@@ -112,6 +112,7 @@ numpy==1.21.4
     #   -r requirements.in
     #   blis
     #   gensim
+    #   pandas
     #   pytorch-lightning
     #   scikit-learn
     #   scipy
@@ -127,6 +128,8 @@ packaging==21.2
     #   huggingface-hub
     #   spacy
     #   transformers
+pandas==1.3.4
+    # via -r requirements.in
 pathy==0.6.1
     # via spacy
 pep517==0.12.0
@@ -153,8 +156,12 @@ pydantic==1.8.2
     #   thinc
 pyparsing==2.4.7
     # via packaging
+python-dateutil==2.8.2
+    # via pandas
 pytorch-lightning==1.1.6
     # via -r requirements.in
+pytz==2021.3
+    # via pandas
 pyyaml==6.0
     # via
     #   huggingface-hub
@@ -194,6 +201,7 @@ six==1.16.0
     #   absl-py
     #   google-auth
     #   grpcio
+    #   python-dateutil
     #   sacremoses
 sklearn==0.0
     # via -r requirements.in
