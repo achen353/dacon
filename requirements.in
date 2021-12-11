@@ -4,6 +4,7 @@
 numpy
 pytorch-lightning==1.1.6
 scipy
+pandas
 sentencepiece
 sklearn
 spacy
