@@ -45,7 +45,7 @@ pip install -v --disable-pip-version-check --no-cache-dir --global-option="--cpp
 | DACon Fixed Consistency | 190.93 | 216.88 | 240.85 | 266.48 |
 |    DACon Consistency    | 185.49 | 218.16 | 240.49 | 266.91 |
 
-See the figures [here](exp_figures).
+See the [report](cs-8803-dmm-project-report-achen353-cchang397.pdf) for full results and experiment details.
 
 ## Model Training
 
